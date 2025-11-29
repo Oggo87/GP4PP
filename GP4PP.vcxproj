@@ -22,9 +22,9 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{5dda35af-e7ca-41ab-bfca-48df99cef570}</ProjectGuid>
-    <RootNamespace>IndividualMeshesAndTextures</RootNamespace>
+    <RootNamespace>GP4PP</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>IndividualMeshesAndTextures</ProjectName>
+    <ProjectName>GP4PP</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -143,10 +143,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="IndividualMeshesAndTextures.cpp" />
+    <ClCompile Include="GP4PP.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="IndividualMeshesAndTextures.ini">
+    <CopyFileToFolders Include="GP4PP.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="README.md" />

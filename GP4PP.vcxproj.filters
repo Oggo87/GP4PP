@@ -7,7 +7,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="IndividualMeshesAndTextures.cpp">
+    <ClCompile Include="GP4PP.cpp">
       <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
@@ -15,6 +15,6 @@
     <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="IndividualMeshesAndTextures.ini" />
+    <CopyFileToFolders Include="GP4PP.ini" />
   </ItemGroup>
 </Project>
