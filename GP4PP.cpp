@@ -1079,7 +1079,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 		}
 		catch (exception ex) {}
 
-		OutputDebugStringA(("CD Check : " + string(disableCDCheck ? "Disabled" : "Enabled")).c_str());
+		OutputGP4PPDebugString("CD Check : " + string(disableCDCheck ? "Disabled" : "Enabled"));
 
 		// Hi-Res Pitcrews
 		try
@@ -1088,7 +1088,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 		}
 		catch (exception ex) {}
 
-		OutputDebugStringA(("Hi-Res Pitcrews : " + string(pitcrewSettings.enableHiResMeshes ? "Enabled" : "Disabled")).c_str());
+		OutputGP4PPDebugString("Hi-Res Pitcrews : " + string(pitcrewSettings.enableHiResMeshes ? "Enabled" : "Disabled"));
 
 		// Individual Pitcrews
 		try
@@ -1097,7 +1097,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 		}
 		catch (exception ex) {}
 
-		OutputDebugStringA(("Individual Pitcrews : " + string(pitcrewSettings.individualMeshes ? "Enabled" : "Disabled")).c_str());
+		OutputGP4PPDebugString("Individual Pitcrews : " + string(pitcrewSettings.individualMeshes ? "Enabled" : "Disabled"));
 
 		// Pitcrews Buffer Size
 		try
@@ -1106,7 +1106,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 		}
 		catch (exception ex) {}
 
-		OutputDebugStringA(("Pitcrews D3D Buffer Size: " + to_string(pitcrewSettings.d3dBufferSize)).c_str());
+		OutputGP4PPDebugString("Pitcrews D3D Buffer Size: " + to_string(pitcrewSettings.d3dBufferSize));
 
 		// Track Folders
 		try
@@ -1115,7 +1115,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 		}
 		catch (exception ex) {}
 
-		OutputDebugStringA(("Track Folders : " + string(trackFolders ? "Enabled" : "Disabled")).c_str());
+		OutputGP4PPDebugString("Track Folders : " + string(trackFolders ? "Enabled" : "Disabled"));
 
 		// Cockpit Visor
 		try
@@ -1124,7 +1124,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 		}
 		catch (exception ex) {}
 
-		OutputDebugStringA(("Cockpit Visor : " + string(cockpitVisor ? "Enabled" : "Disabled")).c_str());
+		OutputGP4PPDebugString("Cockpit Visor : " + string(cockpitVisor ? "Enabled" : "Disabled"));
 
 		if(cockpitVisor)
 		{
@@ -1134,7 +1134,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			}
 			catch (exception ex) {}
 
-			OutputDebugStringA(("Cockpit Visor Object Name: " + visorObjectName).c_str());
+			OutputGP4PPDebugString("Cockpit Visor Object Name: " + visorObjectName);
 
 			try
 			{
@@ -1158,7 +1158,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 				visorColour += (visorBytes[i] << i * 8);
 			}
 
-			OutputDebugStringA(("Cockpit Visor Colour: B: " + to_string(visorBytes[0]) + " G: " + to_string(visorBytes[1]) + " R: " + to_string(visorBytes[2]) + " A: " + to_string(visorBytes[3])).c_str());
+			OutputGP4PPDebugString("Cockpit Visor Colour: B: " + to_string(visorBytes[0]) + " G: " + to_string(visorBytes[1]) + " R: " + to_string(visorBytes[2]) + " A: " + to_string(visorBytes[3]));
 
 			try
 			{
@@ -1166,7 +1166,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			}
 			catch (exception ex) {}
 
-			OutputDebugStringA(("Cockpit Visor Transparency Multiplier: " + to_string(transparencyMultiplier)).c_str());
+			OutputGP4PPDebugString("Cockpit Visor Transparency Multiplier: " + to_string(transparencyMultiplier));
 		}
 
 		for (int assetIndex = 0; assetIndex < 9; assetIndex++)
@@ -1182,7 +1182,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 				MemUtils::patchAddress((LPVOID)(individualMeshesAddress + assetIndex), MemUtils::toBytes(!individualMeshesEnabled[assetIndex]), sizeof(bool));
 
-				OutputDebugStringA(("Individual " + assetNames[assetIndex] + ": " + (individualMeshesEnabled[assetIndex] ? "Enabled" : "Disabled")).c_str());
+				OutputGP4PPDebugString("Individual " + assetNames[assetIndex] + ": " + (individualMeshesEnabled[assetIndex] ? "Enabled" : "Disabled"));
 			}
 
 			if (assetIndex < 5)
@@ -1194,7 +1194,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 				}
 				catch (exception ex) {}
 
-				OutputDebugStringA(("LOD 0 Only " + assetNames[assetIndex] + ": " + (lod0Only[assetIndex] ? "Enabled" : "Disabled")).c_str());
+				OutputGP4PPDebugString("LOD 0 Only " + assetNames[assetIndex] + ": " + (lod0Only[assetIndex] ? "Enabled" : "Disabled"));
 
 				vector<int> lodEntries;
 
@@ -1219,7 +1219,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 						messageBuilder << lodEntries[lodIndex];
 					}
 
-					OutputDebugStringA(messageBuilder.str().c_str());
+					OutputGP4PPDebugString(messageBuilder.str());
 				}
 
 				//Fill with 0s if vector is too short
@@ -1236,7 +1236,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 				messageBuilder << "Number LODs for " << assetNames[assetIndex] << ": " << nLods;
 
-				OutputDebugStringA(messageBuilder.str().c_str());
+				OutputGP4PPDebugString(messageBuilder.str());
 
 				//Patch Number of LODs per Mesh
 				MemUtils::patchAddress((LPVOID)(lodsPerMeshAddress + assetIndex * sizeof(int)), MemUtils::toBytes(nLods), sizeof(int));
@@ -1256,7 +1256,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			}
 			catch (exception ex) {}
 
-			OutputDebugStringA(("AutoName " + assetNames[assetIndex] + ": " + (autoName ? "Enabled" : "Disabled")).c_str());
+			OutputGP4PPDebugString("AutoName " + assetNames[assetIndex] + ": " + (autoName ? "Enabled" : "Disabled"));
 
 			//Check if per Team
 			try
@@ -1265,7 +1265,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			}
 			catch (exception ex) {}
 
-			OutputDebugStringA(("Per Team " + assetNames[assetIndex] + ": " + (perTeam[assetIndex] ? "Enabled" : "Disabled")).c_str());
+			OutputGP4PPDebugString("Per Team " + assetNames[assetIndex] + ": " + (perTeam[assetIndex] ? "Enabled" : "Disabled"));
 
 			//Check if per Driver
 			try
@@ -1274,7 +1274,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			}
 			catch (exception ex) {}
 
-			OutputDebugStringA(("Per Driver " + assetNames[assetIndex] + ": " + (perDriver[assetIndex] ? "Enabled" : "Disabled")).c_str());
+			OutputGP4PPDebugString("Per Driver " + assetNames[assetIndex] + ": " + (perDriver[assetIndex] ? "Enabled" : "Disabled"));
 
 			//Check if per Track
 			try
@@ -1283,7 +1283,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			}
 			catch (exception ex) {}
 
-			OutputDebugStringA(("Per Track " + assetNames[assetIndex] + ": " + (perTrack[assetIndex] ? "Enabled" : "Disabled")).c_str());
+			OutputGP4PPDebugString("Per Track " + assetNames[assetIndex] + ": " + (perTrack[assetIndex] ? "Enabled" : "Disabled"));
 
 			//Load Track Table
 			try
@@ -1363,7 +1363,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 				fileNames[assetIndex] = fileNameBuilder.str().c_str();
 
-				OutputDebugStringA(("File name computed for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]).c_str());
+				OutputGP4PPDebugString("File name computed for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]);
 			}
 			else //If not, load the specified file name
 			{
@@ -1382,7 +1382,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 				}
 				catch (exception ex) {}
 
-				OutputDebugStringA(("File name loaded for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]).c_str());
+				OutputGP4PPDebugString("File name loaded for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]);
 			}
 
 			//Fall back to default name
@@ -1390,7 +1390,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			{
 				fileNames[assetIndex] = defaultFileNames[assetIndex];
 
-				OutputDebugStringA(("Reverting to default file name for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]).c_str());
+				OutputGP4PPDebugString("Reverting to default file name for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]);
 			}
 
 		}
@@ -1398,14 +1398,14 @@ DWORD WINAPI MainThread(LPVOID param) {
 	}
 	else
 	{
-		OutputDebugStringA("Failed to open INI file");
+		OutputGP4PPDebugString("Failed to open INI file");
 
 		//Fall back to default names for all assets
 		for (int assetIndex = 0; assetIndex < 9; assetIndex++)
 		{
 			fileNames[assetIndex] = defaultFileNames[assetIndex];
 
-			OutputDebugStringA(("Using default file name for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]).c_str());
+			OutputGP4PPDebugString("Using default file name for " + assetNames[assetIndex] + ": " + fileNames[assetIndex]);
 
 		}
 	}
@@ -1484,7 +1484,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 	{
 		char* pitcrewVertexBuffer = (char*)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!pitcrewVertexBuffer) {
-			OutputDebugStringA("Error allocating memory\n");
+			OutputGP4PPDebugString("Error allocating memory");
 			return 1;
 		}
 
@@ -1493,7 +1493,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			<< ", " << PtrToUlong(pitcrewVertexBuffer + 4)
 			<< ", " << PtrToUlong(pitcrewVertexBuffer + 8);
 
-		OutputDebugStringA(("Address of new Vertex Buffer: " + messageBuilder.str() + "\n").c_str());
+		OutputGP4PPDebugString("Address of new Vertex Buffer: " + messageBuilder.str());
 
 		//Patch exe for new vertex buffer
 		MemUtils::patchAddress((LPVOID)0x004F929A, (BYTE*)&pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
@@ -1505,7 +1505,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 		char* pitcrewNormalsBuffer = (char*)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!pitcrewNormalsBuffer) {
-			OutputDebugStringA("Error allocating memory\n");
+			OutputGP4PPDebugString("Error allocating memory");
 			return 1;
 		}
 
@@ -1514,7 +1514,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 			<< ", " << PtrToUlong(pitcrewNormalsBuffer + 4)
 			<< ", " << PtrToUlong(pitcrewNormalsBuffer + 8);
 
-		OutputDebugStringA(("Address of new Normals Buffer: " + messageBuilder.str() + "\n").c_str());
+		OutputGP4PPDebugString("Address of new Normals Buffer: " + messageBuilder.str());
 
 		//Patch exe for new normals buffer
 		MemUtils::patchAddress((LPVOID)0x004F92A1, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
