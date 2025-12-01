@@ -10,11 +10,30 @@
     <ClCompile Include="GP4PP.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Pitcrew.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="CockpitVisor.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="General.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Assets.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="GP4PP.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Pitcrew.h" />
+    <ClInclude Include="Helpers.h" />
+    <ClInclude Include="CockpitVisor.h" />
+    <ClInclude Include="General.h" />
+    <ClInclude Include="Assets.h" />
   </ItemGroup>
 </Project>

@@ -143,7 +143,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Assets.cpp" />
+    <ClCompile Include="CockpitVisor.cpp" />
+    <ClCompile Include="General.cpp" />
     <ClCompile Include="GP4PP.cpp" />
+    <ClCompile Include="Pitcrew.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="GP4PP.ini">
@@ -158,6 +162,13 @@
     <ProjectReference Include="IniLib\IniLib.vcxproj">
       <Project>{a42124af-81b0-4f0b-bf3c-10c024775cbb}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Assets.h" />
+    <ClInclude Include="CockpitVisor.h" />
+    <ClInclude Include="General.h" />
+    <ClInclude Include="Helpers.h" />
+    <ClInclude Include="Pitcrew.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
