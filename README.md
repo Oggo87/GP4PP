@@ -1,12 +1,19 @@
-# Individual Meshes And Textures
+# GP4++
+
+A DLL to enhance and extend Grand Prix 4 functionality.
 
 A DLL to enable customisable loading for meshes and textures in Grand Prix 4, plus a couple of extra features.
 
 ## Description
 
-This DLL expands original Grand Prix 4 to allow full control of how meshes (front/rear wheels, helmets, cockpits, cars) and textures (cockpits, helmets) are loaded, supporting per-driver, per-team, and per-track custom loading. It includes features to manage LODs (Level of Detail), auto-naming conventions, and fallbacks to default GP4 assets when custom assets are unavailable.
+This DLL, formerly known as *Individual Meshes And Textures*, expands original Grand Prix 4 to allow full control of how meshes (front/rear wheels, helmets, cockpits, cars, collision meshes) and textures (cockpits, helmets) are loaded, supporting per-driver, per-team, and per-track custom loading. It includes features to manage LODs (Level of Detail), auto-naming conventions, and fallbacks to default GP4 assets when custom assets are unavailable.
 
-Additionally, it enables using the built-in visor shader in the cockpit mesh and fixes the reversed tyre tread bug when using 3D rims.
+Additionally, it includes and expands on features originally found in [*High Resolution Pitcrews for Grand Prix 4* (`HiResPitcrew.dll`)](https://github.com/Oggo87/HiResPitcrew), both overcoming the limitation of 400 vertices in the original game, allowing high resolution pitcrew meshes to be used, and introducing support for per-team pitcrew meshes.
+
+Other features include:
+* Disabling the built-in check for an optical drive
+* Fixing the reversed tyre tread bug when using 3D rims
+* Using the built-in visor shader in the cockpit mesh
 
 See [Usage](#Usage) for more info.
 
@@ -20,67 +27,66 @@ See [Usage](#Usage) for more info.
 ### Prerequisites
 
 * Grand Prix 4
+* Carset Manager (CSM) by ZaZ (recommended) or)
 * GP4 Memory Access by Carl_gpgames (recommended) or
 * CheatEngine or
 * Any other DLL injection tool
 
 ### Installing
 
+#### Carset Manager (CSM)
+
+In the `Files` section of the CSM file, add the subpath to the DLL. Make sure that `GP4PP.ini` is located in the same folder as the DLL.
+
+Example - `GP4PP.dll` and `MyOtherDLL.dll` located in the `Files` folder inside the main mod data folder
+
+```ini
+[Files]
+InjectDll = ""%DataPath%Files\GP4PP.dll","%DataPath%Files\MyOtherDLL.dll""
+```
 #### GP4 Memory Access
 
-Under the *DLLs* tab, add an entry pointing to `IndividualMeshesAndTextures.dll`. Make sure that `IndividualMeshesAndTextures.ini` is located in the same folder as the DLL.
+Under the *DLLs* tab, add an entry pointing to `GP4PP.dll`. Make sure that `GP4PP.ini` is located in the same folder as the DLL.
 
 ### Usage
 
-All settings are contained in `IndividualMeshesAndTextures.ini` and everything is designed to revert back to default GP4 behaviour, including if `IndividualMeshesAndTextures.ini` itself missing. The `IndividualMeshesAndTextures.ini` file that is included with the release is also pre-configured to mimic GP4's default behaviour.
+All settings are contained in `GP4PP.ini` and everything is designed to revert back to default GP4 behaviour, including if `GP4PP.ini` itself missing. The `GP4PP.ini` file that is included with the release is also pre-configured to mimic GP4's default behaviour.
 
-`IndividualMeshesAndTextures.ini` is divided in 4 logical sections: 
+`GP4PP.ini` is divided in 5 logical sections: 
 
+* [Settings](#Settings)
+* [Pitcrew Settings](#Pitcrew-Settings)
 * [Individual Meshes](#Individual-Meshes)
 * [LOD Table](#LOD-Table)
-* [Settings](#Settings)
 * [Assets Settings](#Assets-Settings)
 
-#### Individual Meshes
-
-This section contains entries to enable individual mesh loading for mesh types that are generic by default in GP4: Front Wheels, Rear Wheels, Helmets and Cockpits. Entries can be set to `true` / `false` or `1` / `0`.
-
-Cars are not included in this section, as they are already use individual loading by default and `IndividualMeshesAndTextures.dll`, by design choice, does not allow to set them as generic.
-
-```ini
-[IndividualMeshes]
-FrontWheels = false
-RearWheels = false
-Helmets = false
-Cockpits = false
-```
-
-#### LOD Table
-This section allows to specify which LODs (Levels of Detail) will be used by each mesh type. GP4 allows a maximum of 5 LODs per mesh type. `IndividualMeshesAndTextures.dll` will automatically exclude all 0 values at the _end_ of each entry, and will also 0-fill any entries that contain less than 5 values, guaranteeing full compatibility with GP4 internal loading. 
-
-```ini
-[LODTable]
-FrontWheels	=	0,	1,	2,	3,	0
-RearWheels	=	0,	1,	2,	3,	0
-Helmets		=	0,	1,	2,	3,	0
-Cockpits	=	0,	0,	0,	0,	0
-Cars		=	0,	1,	2,	3,	4
-```
-
 #### Settings
-This section contains two entries:
+This section contains four entries:
 
+* [Disable CD Check](#Disable-CD-Check)
 * [Track Folders](#Track-Folders)
 * [Cockpit Visor](#Cockpit-Visor)
+* [Fix 3D Wheels](#Fix-3D-Wheels)
 
 ```ini
 [Settings]
+DisableCDCheck = false
+Fix3DWheels = false
 TrackFolders = false
 CockpitVisor = false
 ```
 
+##### Disable CD Check
+
+This utility setting disables the built-in check for an optical drive in GP4, allowing the game to run without requiring a CD/DVD drive or a mounted image.
+
+##### Fix 3D Wheels
+
+This utility setting fixes the reversed tyre tread bug that occurs when using 3D rims in GP4. When enabled, the tyre treads will display correctly when `Rotate wheels via textures v2` is disabled in `f1graphics.cfg`.
+
 ##### Track Folders
-This utility setting, in combination with `AutoName` found in each individual asset section (see [Assets Settings](#Assets-Settings)), tells `IndividualMeshesAndTextures.dll` to look into track subfolders for those assets that are have `PerTrack` set to `true`.
+
+This utility setting, in combination with `AutoName` found in each individual asset section (see [Assets Settings](#Assets-Settings)), tells `GP4PP.dll` to look into track subfolders for those assets that are have `PerTrack` set to `true`.
 
 Tracks are indexed 1 through 17.
 
@@ -117,6 +123,107 @@ Colour = 128, 128, 128, 0
 Transparency = 0.5
 ```
 
+#### Pitcrew Settings
+
+This section contains entries to enable high resolution pitcrew meshes and per-team pitcrew meshes.
+
+```ini
+[Pitcrews]
+HiResMeshes = false
+IndividualMeshes = false
+CustomD3DBufferSize = 0x400000
+```
+##### Hi-Resolution Meshes
+This setting allows to enable loading high resolution pitcrew meshes, overcoming the original GP4 limitation of 400 vertices per pitcrew mesh. The entry can be set to `true` / `false` or `1` / `0`.
+
+##### Individual Meshes
+This setting allow to enable loading per-team pitcrew meshes. The entry can be set to `true` / `false` or `1` / `0`.
+
+When enabled, all `animsetup.set` and `animsetupmonaco.set` files, located in both the `qualifying` and `race` folders of `anim.wad`, need to be modified to include 12 entries for the meshes, one per team, instead of the original single entry for all teams, plus the Marshall mesh. Failure to do so will result in crashes or other issues.
+
+Example - Original vs Modified `animsetup.set` and `animsetupmonaco.set` for the `qualifying` folder
+
+<table>
+<tr>
+<th>Original</th>
+<th>Modified</th>
+</tr>
+<tr>
+<td>
+
+```
+2
+Engineer.mdb
+Marshall.mdb
+2
+EngineerLo.mdb
+MarshallLo.mdb
+```
+</td>
+<td>
+
+```
+12
+Engineer_Ferrari.mdb
+Engineer_Mclaren.mdb
+Engineer_Williams.mdb
+Engineer_Benetton.mdb
+Engineer_Bar.mdb
+Engineer_Jordan.mdb
+Engineer_Arrows.mdb
+Engineer_Sauber.mdb
+Engineer_Jaguar.mdb
+Engineer_Minardi.mdb
+Engineer_Prost.mdb
+Marshall.mdb
+12
+Engineer_FerrariLo.mdb
+Engineer_MclarenLo.mdb
+Engineer_WilliamsLo.mdb
+Engineer_BenettonLo.mdb
+Engineer_BarLo.mdb
+Engineer_JordanLo.mdb
+Engineer_ArrowsLo.mdb
+Engineer_SauberLo.mdb
+Engineer_JaguarLo.mdb
+Engineer_MinardiLo.mdb
+Engineer_ProstLo.mdb
+MarshallLo.mdb
+```
+
+</td>
+</tr>
+</table>
+
+##### Custom D3D Buffer Size
+This setting allows to specify a custom size (in either decimal or hexadecimal format) for the Direct3D buffer used to load pitcrew meshes. By default, GP4 uses a 0x4000 (16384 bytes) buffer, which works fine for the original low-poly pitcrew meshes, but not enough for high resolution pitcrew meshes. Some instability issues may arise if the buffer size is too large, hence the default setting in `GP4PP.ini` is set to 0x400000 (4 megabytes), which should be enough for most high resolution pitcrew meshes. If `HiResMeshes` is set to `false`, this setting is ignored and GP4's default buffer size is used.
+
+#### Individual Meshes
+
+This section contains entries to enable individual mesh loading for mesh types that are generic by default in GP4: Front Wheels, Rear Wheels, Helmets and Cockpits. Entries can be set to `true` / `false` or `1` / `0`.
+
+Cars are not included in this section, as they already use individual loading by default and `GP4PP.dll`, by design choice, does not allow to set them as generic.
+
+```ini
+[IndividualMeshes]
+FrontWheels = false
+RearWheels = false
+Helmets = false
+Cockpits = false
+```
+
+#### LOD Table
+This section allows to specify which LODs (Levels of Detail) will be used by each mesh type. GP4 allows a maximum of 5 LODs per mesh type. `GP4PP.dll` will automatically exclude all 0 values at the _end_ of each entry, and will also 0-fill any entries that contain less than 5 values, guaranteeing full compatibility with GP4 internal loading. 
+
+```ini
+[LODTable]
+FrontWheels	=	0,	1,	2,	3,	0
+RearWheels	=	0,	1,	2,	3,	0
+Helmets		=	0,	1,	2,	3,	0
+Cockpits	=	0,	0,	0,	0,	0
+Cars		=	0,	1,	2,	3,	4
+```
+
 #### Assets Settings
 
 These sections are, more specifically:
@@ -143,16 +250,16 @@ Tracks = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 ```
 
 ##### AutoName
-Available for all assets, `AutoName` works in conjunction with `IndividualMeshes`, `PerTeam`, `PerDriver`, `PerTrack` and `TrackFolders`, and allows `IndividualMeshesAndTextures.dll` to automatically determine what file names to use, depending on the chosen options.
+Available for all assets, `AutoName` works in conjunction with `IndividualMeshes`, `PerTeam`, `PerDriver`, `PerTrack` and `TrackFolders`, and allows `GP4PP.dll` to automatically determine what file names to use, depending on the chosen options.
 
 `AutoName` follows the convention of original GP4 files, trying to keep it as close as possible to the original file names, including the little differences like `LOD_0` for Cars and Wheels and `00` for Helmets and Cockpits.
 
 See [`PerTrack`](#PerTeam-PerDriver-PerTrack) for some more details, it is recommended to check the GPxPatch debug log for the asset name(s) being loaded.
 
-#### LOD0Only
+##### LOD0Only
 Available for mesh entries only, overrides the corresponding entry in the [LOD Table](#LOD-Table), forcing to use only LOD 0.
 
-#### PerTeam, PerDriver, PerTrack
+##### PerTeam, PerDriver, PerTrack
 Available for all assets, these settings only have an effect when [`AutoName`](#AutoName) is enabled for the corresponding asset.
 
 * `PerTrack`, when not using `TrackFolders`, will append `_track_{track}` at the end of the filename.
@@ -160,7 +267,7 @@ Available for all assets, these settings only have an effect when [`AutoName`](#
 
 See [`FileName`](#FileName) for more details about `{variables}`.
 
-#### FileName
+##### FileName
 Available for all assets, this setting allows to specify a custom file name pattern for each asset. For **Helmet Textures**, there are two independent settings, one per texture: `FileName1` and `FileName2`.
 
 7 `{variables}` are available to use in the file names, enclosed in curly brackets:
@@ -209,7 +316,7 @@ The Helmet mesh at Monza will be loaded as follows
 cars\track15\car_helmet_00.gp4
 ```
 
-#### Tracks
+##### Tracks
 Available for all assets, this setting allows some additional control when using per-track assets, either with the [`PerTrack`](#PerTeam-PerDriver-PerTrack) setting or the manual `{track}` variable. Acknowledging that not all tracks might need their own unique asset, with this setting is possible to specify a fall-back track index for each track slot. If an asset isn't found for the track slot, the asset from the specified fall-back track slot will be attempted to be loaded, before reverting back to GP4's default. If less than 17 entries are present, track 1 will be used for the missing track slots.
 
 Example - Per-Team Helmet mesh, with Track Folders enabled and all fall-back tracks set to 1
