@@ -157,14 +157,14 @@ namespace Assets
 
 		if (useDefaultFileName)
 		{
-			OutputDebugStringA("Reverting to default GP4 file name [");
+			OutputGP4PPDebugString("Reverting to default GP4 file name [");
 		}
 
-		OutputDebugStringA(path.c_str());
+		OutputGP4PPDebugString(path.c_str());
 
 		if (useDefaultFileName)
 		{
-			OutputDebugStringA("]");
+			OutputGP4PPDebugString("]");
 		}
 
 		if (assetIndex == ASSET_ID::COLLISION_MESH)
@@ -480,6 +480,16 @@ namespace Assets
 		variables["driverindex"] = to_string(MemUtils::addressToValue<int>(espVar + 0x10) + 1);
 	}
 
+	void defaultHelmetTextureFileName()
+	{
+		OutputGP4PPDebugString("Reverting to default track [");
+
+		//calculate new file name
+		calcFileName();
+
+		OutputGP4PPDebugString("]");
+	}
+
 	__declspec(naked) void helmetTexture1Func()
 	{
 		//dummy call to ReplaceWildCards to ensure registries and stack are properly set
@@ -522,12 +532,8 @@ namespace Assets
 			//set variables
 			initHelmetTextureVariables();
 
-			OutputDebugStringA("Reverting to default track [");
-
-			//calculate new file name
-			calcFileName();
-
-			OutputDebugStringA("]");
+			//revert to	default file name
+			defaultHelmetTextureFileName();
 
 			//save volatile registers
 			RegUtils::saveVolatileRegisters();
@@ -599,12 +605,8 @@ namespace Assets
 			//set variables
 			initHelmetTextureVariables();
 
-			OutputDebugStringA("Reverting to default track [");
-
-			//calculate new file name
-			calcFileName();
-
-			OutputDebugStringA("]");
+			//revert to	default file name
+			defaultHelmetTextureFileName();
 
 			//save volatile registers
 			RegUtils::saveVolatileRegisters();
