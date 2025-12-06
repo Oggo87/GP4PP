@@ -120,6 +120,109 @@ namespace Pitcrew
 		OutputGP4PPDebugString("Pitcrews D3D Buffer Size: " + to_string(d3dBufferSize));
 	};
 
+	//Target Addresses
+	DWORD pitcrewStartAddress = 0x004F8A89;
+	DWORD pitcrewStartAddress2 = 0x004f7961;
+
+	//Jump Back Addresses
+	DWORD pitcrewJumpBackAddress = 0x004f8a9c;
+	DWORD pitcrewJumpBackAddress2 = 0x004f7974;
+
+	DWORD useRaceAnimFolderAddress = 0x00aa1b54;
+
+	int mdbSlotIndex;
+	DWORD animSetDataAddress;
+	DWORD isHighResMeshAddress;
+	int* stackPtr;
+	bool useRaceAnimFolder;
+	bool isHighResMesh;
+
+	__declspec(naked) void pitcrewFunc1()
+	{
+
+		//save source variables and address from registers
+		__asm {
+			mov stackPtr, ESP
+
+			mov mdbSlotIndex, ESI		//mdb slot index = anim slot index
+
+			mov animSetDataAddress, EBP
+		}
+
+		//read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		isHighResMeshAddress = MemUtils::addressToValue<DWORD>(animSetDataAddress + 0x204);
+
+		isHighResMesh = MemUtils::addressToPtr<bool>(isHighResMeshAddress)[mdbSlotIndex];
+
+		//adjust stack value for mdb slot index
+		stackPtr += 0x8;
+
+		//if not using race anim folder, there's one anim slot per car (two per team)
+		//divide index by 2 to get one mdb slot per team
+		if (!useRaceAnimFolder)
+		{
+			mdbSlotIndex /= 2;
+		}
+
+		//mdb slots are stored as pairs (even = hi-res, odd = low-res)
+		mdbSlotIndex *= 2;
+
+		if (!isHighResMesh)
+		{
+			mdbSlotIndex += 1;
+		}
+
+		//write back adjusted mdb slot index to stack
+		*stackPtr = mdbSlotIndex;
+
+		__asm jmp pitcrewJumpBackAddress //jump back into regular flow
+	}
+
+	__declspec(naked) void pitcrewFunc2()
+	{
+		//save source variables and address from registers
+		__asm {
+			mov stackPtr, ESP
+
+			mov mdbSlotIndex, EBX	//mdb slot index = anim slot index
+
+			mov animSetDataAddress, EBP
+		}
+
+		//read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		isHighResMeshAddress = MemUtils::addressToValue<DWORD>(animSetDataAddress + 0x204);
+
+		isHighResMesh = MemUtils::addressToPtr<bool>(isHighResMeshAddress)[mdbSlotIndex];
+
+		//adjust stack value for anim slot index
+		stackPtr += 0xA;
+
+		//if not using race anim folder, there's one anim slot per car (two per team)
+		//divide index by 2 to get one mdb slot per team
+		if (!useRaceAnimFolder)
+		{
+			mdbSlotIndex /= 2;
+		}
+
+		//mdb slots are stored as pairs (even = hi-res, odd = low-res)
+		mdbSlotIndex *= 2;
+
+		if (!isHighResMesh)
+		{
+			mdbSlotIndex += 1;
+		}
+
+		//write back adjusted mdb slot index to stack
+		*stackPtr = mdbSlotIndex;
+
+		__asm jmp pitcrewJumpBackAddress2 //jump back into regular flow
+	}
+
+
 	void ApplyPatches()
 	{
 
@@ -131,42 +234,11 @@ namespace Pitcrew
 		if (individualMeshes)
 		{
 
-			//	Patch first function
-			///////////////////////////////////////////////////
-			//	004f8a89 89  f1					MOV        ECX, ESI										Save anim slot index into ECX
-			//	004f8a8b a0  54  1b	aa  00      MOV        AL, [BOOL_useRaceAnimFolder_0x00aa1b54]		Check if using race anim folder
-			//	004f8a90 84  c0					TEST       AL, AL										If not
-			//	004f8a92 75  02					JNZ        LAB_004f8a96									Skip
-			//	004f8a94 d1  f9					SAR        ECX, 0x1										If not race anim folder, divide index by 2
-			//	004f8a96 d1  e1					SHL        ECX, 0x1										Multiply index by 2 (to get correct offset in MDB mesh array)
-			//	004f8a98 89  4c  24  20			MOV        dword ptr[ESP + 0x20], ECX					Save new index
-			///////////////////////////////////////////////////
+			//Re-route for pitctrew function 1
+			MemUtils::rerouteFunction(pitcrewStartAddress, PtrToUlong(pitcrewFunc1), VAR_NAME(pitcrewFunc1));
 
-			// Should be adding 1 when calling for low detail meshes (this->useLowRes?_0x204 == true)
-			// Will probably require jumping to a patch function to handle properly
-
-			DWORD firstPatchAddress = 0x004F8A89;
-			BYTE firstPatch[] = { 0x89, 0xF1, 0xA0, 0x54, 0x1B, 0xAA, 0x00, 0x84, 0xC0, 0x75, 0x02, 0xD1, 0xF9, 0xD1, 0xE1, 0x89, 0x4C, 0x24, 0x20 };
-			GP4MemLib::MemUtils::patchAddress((LPVOID)firstPatchAddress, firstPatch, sizeof(firstPatch));
-
-			//	Patch first function
-			///////////////////////////////////////////////////
-			//	004f7961 89  da					MOV        EDX ,EBX										Save anim slot index into ECX
-			//	004f7963 a0  54  1b  aa  00     MOV        AL, [BOOL_useRaceAnimFolder_0x00aa1b54]		Check if using race anim folder
-			//	004f7968 84  c0					TEST       AL, AL										If not
-			//	004f796a 75  02					JNZ        LAB_004f796e									Skip
-			//	004f796c d1  fa					SAR        EDX, 0x1										If not race anim folder, divide index by 2
-			//	004f796e d1  e2					SHL        EDX, 0x1										Multiply index by 2 (to get correct offset in MDB mesh array)
-			//	004f7970 89  54  24  28			MOV        dword ptr[ESP + 0x28], EDX					Save new index
-			///////////////////////////////////////////////////
-
-			// Should be adding 1 when calling for low detail meshes (this->useLowRes?_0x204 == true)
-			// Will probably require jumping to a patch function to handle properly
-
-			DWORD secondPatchAddress = 0x004F7961;
-			BYTE secondPatch[] = { 0x89, 0xda, 0xa0, 0x54, 0x1b, 0xaa, 0x00, 0x84, 0xc0, 0x75, 0x02, 0xd1, 0xfa, 0xd1, 0xe2, 0x89, 0x54, 0x24, 0x28 };
-			GP4MemLib::MemUtils::patchAddress((LPVOID)secondPatchAddress, secondPatch, sizeof(secondPatch));
-
+			//Re-route for pitcrew function 2
+			MemUtils::rerouteFunction(pitcrewJumpBackAddress2, PtrToUlong(pitcrewFunc2), VAR_NAME(pitcrewFunc2));
 
 			// Adjust for marshalls meshes now using mesh slots 22 (hi-res) and 23 (low res)
 			byte lowResMarshallIndex = 0x17; // 23

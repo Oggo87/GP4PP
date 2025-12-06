@@ -158,7 +158,7 @@ namespace CockpitVisor
 		__asm jmp cockpitVisorJumpBackAddress //jump back into regular flow
 	}
 
-	__declspec(naked) void cockpitVisorFunc2()
+	__declspec(naked) void pitcrewFunc2()
 	{
 		__asm {
 			mov CGP4Car, EBP
@@ -234,6 +234,6 @@ namespace CockpitVisor
 		MemUtils::rerouteFunction(cockpitVisorStartAddress, PtrToUlong(cockpitVisorFunc), VAR_NAME(cockpitVisorFunc));
 
 		//Re-route for cockpit visor 2
-		MemUtils::rerouteFunction(cockpitVisorStartAddress2, PtrToUlong(cockpitVisorFunc2), VAR_NAME(cockpitVisorFunc2));
+		MemUtils::rerouteFunction(cockpitVisorStartAddress2, PtrToUlong(pitcrewFunc2), VAR_NAME(pitcrewFunc2));
 	}
 };
