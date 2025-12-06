@@ -67,6 +67,7 @@ This section contains four entries:
 * [Fix 3D Wheels](#Fix-3D-Wheels)
 * [Track Folders](#Track-Folders)
 * [Cockpit Visor](#Cockpit-Visor)
+* [Steering Wheel Advanced Car Sahder](#Steering-Wheel-Advanced-Car-Shader)
 
 ```ini
 [Settings]
@@ -74,6 +75,7 @@ DisableCDCheck = false
 Fix3DWheels = false
 TrackFolders = false
 CockpitVisor = false
+StWheelAdvancedCarShader = false
 ```
 
 ##### Disable CD Check
@@ -122,6 +124,12 @@ ObjectName = Visor
 Colour = 128, 128, 128, 0
 Transparency = 0.5
 ```
+
+##### Steering Wheel Advanced Car Shader
+
+This setting allows to enable using GP4's built-in advanced car shader (the same one used for cars and helmets) for the in-cockpit steering wheel mesh, improving its appearance with better reflections and lighting effects.
+
+Advanced Car Shader does not support alpha-blending, so if the steering wheel mesh uses any alpha-blending textures (for example, for cutouts or holes in the mesh), those parts will appear fully opaque when this setting is enabled. It is intended to be used with full 3D steering wheel meshes that do not rely on alpha-blending.
 
 #### Pitcrew Settings
 

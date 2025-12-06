@@ -9,7 +9,8 @@ namespace General
 {
 	//General settings variables
 	bool disableCDCheck = false;
-	bool fix3DWheelsTreadMapping = true;
+	bool fix3DWheelsTreadMapping = false;
+	bool stWheelAdvancedCarShader = false;
 
 	//Target Addresses
 	DWORD wheelShaderSetMatrixStartAddress = 0x00488661;
@@ -113,6 +114,15 @@ namespace General
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Fix 3D Wheels Tread Mapping : " + string(fix3DWheelsTreadMapping ? "Enabled" : "Disabled"));
+
+		// Enable Advanced Car Shader for in-cockpit steering wheel
+		try
+		{
+			stWheelAdvancedCarShader = iniSettings["Settings"]["StWheelAdvancedCarShader"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Advanced Car Shader for Cockpit Steering Wheel : " + string(stWheelAdvancedCarShader ? "Enabled" : "Disabled"));
 	}
 
 	void ApplyPatches()
@@ -121,8 +131,8 @@ namespace General
 		if (disableCDCheck)
 		{
 			//Patch exe to always return 1 when checking for optical drive
-			byte retVal = 0x01;
-			MemUtils::patchAddress((LPVOID)0x0053712B, (BYTE*)&retVal, sizeof(byte));
+			BYTE retVal = 0x01;
+			MemUtils::patchAddress((LPVOID)0x0053712B, (BYTE*)&retVal, sizeof(BYTE));
 		}
 
 		// Apply Fix 3D Wheels Tread Mapping Patch
@@ -141,6 +151,15 @@ namespace General
 			DWORD shaderPatchAddress = 0x0046a2a8;
 			BYTE shaderPatch[] = { 0xb0, 0x01, 0x90, 0x90, 0x90, 0x90 }; //mov al, 1 - nop - nop - nop - nop - nop
 			GP4MemLib::MemUtils::patchAddress((LPVOID)shaderPatchAddress, shaderPatch, sizeof(shaderPatch));
+		}
+
+		// Apply Advanced Car Shader for in-cockpit steering wheel Patch
+		if (stWheelAdvancedCarShader)
+		{
+			//Patch to set the steering wheel in cockpit view to use the advanced car shader (0x12)
+			DWORD carShaderPatchAddress = 0x0046faf3;
+			BYTE carShaderPatch = { 0x12 }; 
+			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, (BYTE*)&carShaderPatch, sizeof(BYTE));
 		}
 	};
 };
