@@ -1,16 +1,15 @@
-#include "GP4MemLib/GP4MemLib.h"
-#include "IniLib/IniLib.h"
-#include "Helpers.h"
-#include "General.h"
 #include "Assets.h"
-#include "Pitcrew.h"
 #include "CockpitVisor.h"
-#include <map>
+#include "General.h"
+#include "Helpers.h"
+#include "IniLib/IniLib.h"
+#include <libloaderapi.h>
+#include "Pitcrew.h"
+#include <processthreadsapi.h>
 #include <string>
 #include <windows.h>
 
 using namespace std;
-using namespace GP4MemLib;
 using namespace IniLib;
 using namespace GP4PP;
 
@@ -65,17 +64,18 @@ DWORD WINAPI MainThread(LPVOID param)
 	return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-
-	OutputGP4PPDebugString(MemUtils::dwordToString(ul_reason_for_call));
-
-	switch (ul_reason_for_call) {
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+	switch (ul_reason_for_call)
+	{
 	case DLL_PROCESS_ATTACH:
+		OutputGP4PPDebugString("Attaching to process");
 		CreateThread(NULL, 0, MainThread, NULL, 0, NULL);
 		break;
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 	case DLL_PROCESS_DETACH:
+		OutputGP4PPDebugString("Detaching from process");
 		break;
 	}
 	return TRUE;
