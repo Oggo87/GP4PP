@@ -2,8 +2,6 @@
 
 A DLL to enhance and extend Grand Prix 4 functionality.
 
-A DLL to enable customisable loading for meshes and textures in Grand Prix 4, plus a couple of extra features.
-
 ## Description
 
 This DLL, formerly known as *Individual Meshes And Textures*, expands original Grand Prix 4 to allow full control of how meshes (front/rear wheels, helmets, cockpits, cars, collision meshes) and textures (cockpits, helmets) are loaded, supporting per-driver, per-team, and per-track custom loading. It includes features to manage LODs (Level of Detail), auto-naming conventions, and fallbacks to default GP4 assets when custom assets are unavailable.
@@ -362,6 +360,14 @@ cars\car_ferrari_car1_lod_0.gp4
 Diego "Öggo" Noriega
 
 ## Version History
+
+* 2.0
+    * First release as GP4++
+    * Major refactor of the codebase
+    * Merged HiResPitcrew.dll functionality into GP4PP.dll
+    * Added support for per-team pitcrew meshes
+    * Added patch to disable built-in CD check
+    * Added patch to enable advanced car shader for in-cockpit steering wheel mesh
 
 * 1.4
     * Update - Added fix for reversed tyre tread bug when using 3D rims
