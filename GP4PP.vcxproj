@@ -22,9 +22,9 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{5dda35af-e7ca-41ab-bfca-48df99cef570}</ProjectGuid>
-    <RootNamespace>IndividualMeshesAndTextures</RootNamespace>
+    <RootNamespace>GP4PP</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>IndividualMeshesAndTextures</ProjectName>
+    <ProjectName>GP4PP</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -143,10 +143,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="IndividualMeshesAndTextures.cpp" />
+    <ClCompile Include="Assets.cpp" />
+    <ClCompile Include="CockpitVisor.cpp" />
+    <ClCompile Include="General.cpp" />
+    <ClCompile Include="GP4PP.cpp" />
+    <ClCompile Include="Pitcrew.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="IndividualMeshesAndTextures.ini">
+    <CopyFileToFolders Include="GP4PP.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="README.md" />
@@ -158,6 +162,13 @@
     <ProjectReference Include="IniLib\IniLib.vcxproj">
       <Project>{a42124af-81b0-4f0b-bf3c-10c024775cbb}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Assets.h" />
+    <ClInclude Include="CockpitVisor.h" />
+    <ClInclude Include="General.h" />
+    <ClInclude Include="Helpers.h" />
+    <ClInclude Include="Pitcrew.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
