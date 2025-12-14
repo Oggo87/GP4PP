@@ -1,9 +1,9 @@
 #include "CockpitVisor.h"
-#include "Helpers.h"
-#include "GP4MemLib/GP4MemLib.h"
-#include "IniLib/IniLib.h"
-#include "BGRA.h"
-#include "CGP4Glass.h"
+#include "../Utils/Helpers.h"
+#include "../Utils/BGRA.h"
+#include "../Utils/CGP4Glass.h"
+#include "../GP4MemLib/GP4MemLib.h"
+#include "../IniLib/IniLib.h"
 
 using namespace std;
 using namespace GP4MemLib;

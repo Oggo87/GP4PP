@@ -1,6 +1,6 @@
 #include "General.h"
-#include "Helpers.h"
-#include "GP4MemLib/GP4MemLib.h"
+#include "../Utils/Helpers.h"
+#include "../GP4MemLib/GP4MemLib.h"
 
 using namespace GP4MemLib;
 using namespace GP4PP;

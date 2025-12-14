@@ -1,14 +1,11 @@
 #pragma once
-#include "IniLib/IniLib.h"
+#include "../IniLib/IniLib.h"
 
 using namespace IniLib;
 
-namespace Assets
+namespace General
 {
-
 	void LoadSettings(IniFile iniSettings);
-
-	void DefaultSettings();
 
 	void ApplyPatches();
 };

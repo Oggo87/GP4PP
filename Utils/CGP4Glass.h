@@ -1,7 +1,7 @@
 #pragma once
-#include "BGRA.h"
-#include "IniLib/IniLib.h"
-#include "Helpers.h"
+#include "../Utils/Helpers.h"
+#include "../Utils/BGRA.h"
+#include "../IniLib/IniLib.h"
 
 using namespace std;
 

@@ -143,20 +143,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Assets.cpp" />
-    <ClCompile Include="CockpitVisor.cpp" />
-    <ClCompile Include="General.cpp" />
-    <ClCompile Include="GP4PP.cpp" />
-    <ClCompile Include="Pitcrew.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <CopyFileToFolders Include="GP4PP.ini">
+    <CopyFileToFolders Include="Ini\GP4PP.ini">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="Ini\VisorColours.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="README.md" />
-    <CopyFileToFolders Include="VisorColours.ini">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="GP4MemLib\GP4MemLib.vcxproj">
@@ -167,13 +160,20 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Assets.h" />
-    <ClInclude Include="BGRA.h" />
-    <ClInclude Include="CGP4Glass.h" />
-    <ClInclude Include="CockpitVisor.h" />
-    <ClInclude Include="General.h" />
-    <ClInclude Include="Helpers.h" />
-    <ClInclude Include="Pitcrew.h" />
+    <ClCompile Include="GP4PP.cpp" />
+    <ClCompile Include="Patches\Assets.cpp" />
+    <ClCompile Include="Patches\CockpitVisor.cpp" />
+    <ClCompile Include="Patches\General.cpp" />
+    <ClCompile Include="Patches\Pitcrew.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Patches\Assets.h" />
+    <ClInclude Include="Patches\CockpitVisor.h" />
+    <ClInclude Include="Patches\General.h" />
+    <ClInclude Include="Patches\Pitcrew.h" />
+    <ClInclude Include="Utils\BGRA.h" />
+    <ClInclude Include="Utils\CGP4Glass.h" />
+    <ClInclude Include="Utils\Helpers.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

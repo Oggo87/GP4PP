@@ -1,10 +1,10 @@
-#include "Assets.h"
-#include "CockpitVisor.h"
-#include "General.h"
-#include "Helpers.h"
+#include "Patches/General.h"
+#include "Patches/CockpitVisor.h"
+#include "Patches/Assets.h"
+#include "Patches/Pitcrew.h"
+#include "Utils/Helpers.h"
 #include "IniLib/IniLib.h"
 #include <libloaderapi.h>
-#include "Pitcrew.h"
 #include <processthreadsapi.h>
 #include <string>
 #include <windows.h>

@@ -1,7 +1,7 @@
 #include "Assets.h"
-#include "Helpers.h"
-#include "GP4MemLib/GP4MemLib.h"
-#include "IniLib/IniLib.h"
+#include "../Utils/Helpers.h"
+#include "../GP4MemLib/GP4MemLib.h"
+#include "../IniLib/IniLib.h"
 
 using namespace std;
 using namespace GP4MemLib;

@@ -1,7 +1,7 @@
 #include "Pitcrew.h"
-#include "Helpers.h"
-#include "GP4MemLib/GP4MemLib.h"
-#include "IniLib/IniLib.h"
+#include "../Utils/Helpers.h"
+#include "../GP4MemLib/GP4MemLib.h"
+#include "../IniLib/IniLib.h"
 #include <windows.h>
 
 using namespace std;

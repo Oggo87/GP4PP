@@ -1,5 +1,5 @@
 #pragma once
-#include "IniLib/IniLib.h"
+#include "../IniLib/IniLib.h"
 
 using namespace IniLib;
 
