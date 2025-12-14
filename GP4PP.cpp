@@ -4,8 +4,6 @@
 #include "Patches/Pitcrew.h"
 #include "Utils/Helpers.h"
 #include "IniLib/IniLib.h"
-#include <libloaderapi.h>
-#include <processthreadsapi.h>
 #include <string>
 #include <windows.h>
 

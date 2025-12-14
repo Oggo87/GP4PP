@@ -1,8 +1,8 @@
 #pragma once
 
 #include <vector>
-#include <windows.h>
 #include <initializer_list>
+#include <windows.h>
 
 namespace GP4PP
 {
