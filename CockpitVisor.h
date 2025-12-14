@@ -6,7 +6,7 @@ using namespace IniLib;
 namespace CockpitVisor
 {
 
-	void LoadSettings(IniFile iniSettings);
+	void LoadSettings(IniFile iniSettings, std::string basePath);
 
 	void ApplyPatches();
 };

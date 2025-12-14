@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="GP4PP.ini" />
+    <CopyFileToFolders Include="VisorColours.ini" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Pitcrew.h" />
@@ -35,5 +36,7 @@
     <ClInclude Include="CockpitVisor.h" />
     <ClInclude Include="General.h" />
     <ClInclude Include="Assets.h" />
+    <ClInclude Include="BGRA.h" />
+    <ClInclude Include="CGP4Glass.h" />
   </ItemGroup>
 </Project>

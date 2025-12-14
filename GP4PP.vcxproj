@@ -154,6 +154,9 @@
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="README.md" />
+    <CopyFileToFolders Include="VisorColours.ini">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="GP4MemLib\GP4MemLib.vcxproj">
@@ -165,6 +168,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Assets.h" />
+    <ClInclude Include="BGRA.h" />
+    <ClInclude Include="CGP4Glass.h" />
     <ClInclude Include="CockpitVisor.h" />
     <ClInclude Include="General.h" />
     <ClInclude Include="Helpers.h" />

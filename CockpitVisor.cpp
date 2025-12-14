@@ -2,6 +2,8 @@
 #include "Helpers.h"
 #include "GP4MemLib/GP4MemLib.h"
 #include "IniLib/IniLib.h"
+#include "BGRA.h"
+#include "CGP4Glass.h"
 
 using namespace std;
 using namespace GP4MemLib;
@@ -16,10 +18,12 @@ namespace CockpitVisor
 	//Target Addresses
 	DWORD cockpitVisorStartAddress = 0x004858f9;
 	DWORD cockpitVisorStartAddress2 = 0x00487a61;
+	DWORD zCockpitVisorStartAddress = 0x00487e9c;
 
 	//Jump Back Addresses
 	DWORD cockpitVisorJumpBackAddress = 0x004858fe;
 	DWORD cockpitVisorJumpBackAddress2 = 0x00488a0b;
+	DWORD zCockpitVisorJumpBackAddress = 0x00487ea9;
 
 	//Vars and Data Addresses
 	DWORD cockpitMesh = 0x00a4d5ec;
@@ -32,13 +36,22 @@ namespace CockpitVisor
 
 	//Cockpit Glass Object Variables
 	string visorObjectName = "Visor";
+	bool individualVisorColours = false;
 	int visorObjectIndex = -1;
-	std::vector<short> visorBytes = { 128, 128, 128, 0 };
-	DWORD visorColour = 0x808080;
+	std::vector<CGP4Glass> visorGlassData;
+
+	//Z Cockpit Glass Object Variables
+	bool individualZCockpitVisorColours = false;
+	std::vector<CGP4Glass> zGlassData;
+
+	//Storage variables
+	DWORD cGP4CarAddress = NULL;
+	DWORD zShaderParams = NULL;
+
+	DWORD colour = 0x00000000;
 	float transparencyMultiplier = 0.5;
 
-	DWORD CGP4Car = NULL;
-
+	int driverIndex = 0;
 
 	void SetCockpitVisorShaderParameters()
 	{
@@ -50,6 +63,15 @@ namespace CockpitVisor
 
 		if (visorObjectIndex > -1 && visorObjectIndex < *numCockpitObjects)
 		{
+			if (cGP4CarAddress != NULL && individualVisorColours)
+			{
+				driverIndex = GP4MemLib::MemUtils::addressToValue<int>(cGP4CarAddress + 0x1C);
+			}
+			else
+			{
+				driverIndex = 0;
+			}
+
 			//Get array of mesh objects
 			byte* arrMeshObjects = cockpitMeshStruct + 0x1b4;
 
@@ -67,9 +89,11 @@ namespace CockpitVisor
 
 			//Set Shader Parameters
 			//Colour
-			std::memcpy(&arrayShaderData[*visorObjectIndex].params[0], &visorColour, 4);
+			colour = visorGlassData[driverIndex].colour;
+			std::memcpy(&arrayShaderData[*visorObjectIndex].params[0], &colour, 4);
 
 			//Multiplier
+			transparencyMultiplier = visorGlassData[driverIndex].transparencyMultiplier;
 			std::memcpy(&arrayShaderData[*visorObjectIndex].params[1], &transparencyMultiplier, 4);
 
 			//Unknown
@@ -82,9 +106,9 @@ namespace CockpitVisor
 			arrayShaderData[*visorObjectIndex].params[4] = GP4MemLib::MemUtils::addressToValue<DWORD>(0x00644274);
 
 			//Unknown, possibly reflections
-			if (CGP4Car != NULL)
+			if (cGP4CarAddress != NULL)
 			{
-				float val1 = atan2f(GP4MemLib::MemUtils::addressToValue<float>(CGP4Car + 0x354), GP4MemLib::MemUtils::addressToValue<float>(CGP4Car + 0x35c));
+				float val1 = atan2f(GP4MemLib::MemUtils::addressToValue<float>(cGP4CarAddress + 0x354), GP4MemLib::MemUtils::addressToValue<float>(cGP4CarAddress + 0x35c));
 				float val2 = atan2f(GP4MemLib::MemUtils::addressToValue<float>(0x00a53294), GP4MemLib::MemUtils::addressToValue<float>(0x00a5329c));
 
 				float val = (val2 + 3.1415927f + val1 + 3.1415927f) * 0.5f * 0.03183099f;
@@ -149,6 +173,8 @@ namespace CockpitVisor
 			call ApplyShaderToObject
 		}
 
+		cGP4CarAddress = NULL;
+
 		SetCockpitVisorShaderParameters();
 
 	noObjectFound:
@@ -158,10 +184,10 @@ namespace CockpitVisor
 		__asm jmp cockpitVisorJumpBackAddress //jump back into regular flow
 	}
 
-	__declspec(naked) void pitcrewFunc2()
+	__declspec(naked) void cockpitVisorFunc2()
 	{
 		__asm {
-			mov CGP4Car, EBP
+			mov cGP4CarAddress, EBP
 		}
 
 		SetCockpitVisorShaderParameters();
@@ -171,9 +197,44 @@ namespace CockpitVisor
 		__asm jmp cockpitVisorJumpBackAddress2 //jump back into regular flow
 	}
 
-
-	void LoadSettings(IniFile iniSettings)
+	__declspec(naked) void zCockpitVisorFunc()
 	{
+		RegUtils::saveVolatileRegisters();
+
+		__asm mov cGP4CarAddress, EBP
+
+		__asm mov zShaderParams, EAX
+
+		if (individualZCockpitVisorColours)
+		{
+			driverIndex = GP4MemLib::MemUtils::addressToValue<int>(cGP4CarAddress + 0x1C);
+		}
+		else
+		{
+			driverIndex = 0;
+		}
+
+		//Set Shader Parameters
+		//Colour
+		colour = zGlassData[driverIndex].colour;
+		MemUtils::patchAddress((LPVOID)(zShaderParams), (BYTE*)&(colour), 4);
+
+		//MemUtils::patchAddress((LPVOID)(zShaderParams), (BYTE*)(&(zGlassData[driverIndex].colour)), 4);
+
+		//Multiplier
+		MemUtils::patchAddress((LPVOID)(zShaderParams + 4), (BYTE*)&(zGlassData[driverIndex].transparencyMultiplier), 4);
+
+		RegUtils::restoreVolatileRegisters();
+
+		__asm jmp zCockpitVisorJumpBackAddress //jump back into regular flow
+	}
+
+	void LoadSettings(IniFile iniSettings, string basePath)
+	{
+
+		CGP4Glass defaultGlass, glass;
+		string iniFileName = "VisorColours.ini";
+		IniFile iniVisorSettings;
 
 		// Cockpit Visor
 		try
@@ -186,6 +247,11 @@ namespace CockpitVisor
 
 		if (cockpitVisor)
 		{
+			defaultGlass.colour = { 128, 128, 128, 0 };
+			defaultGlass.transparencyMultiplier = 0.5f;
+
+			glass = defaultGlass;
+
 			try
 			{
 				visorObjectName = iniSettings["CockpitVisor"]["ObjectName"].getString();
@@ -196,36 +262,99 @@ namespace CockpitVisor
 
 			try
 			{
-				visorBytes = iniSettings["CockpitVisor"]["Colour"].getVectorAs<short>();
+				individualVisorColours = iniSettings["CockpitVisor"]["Individual"].getAs<bool>();
 			}
 			catch (exception ex) {}
 
-			while (visorBytes.size() < 4)
-			{
-				visorBytes.push_back(0);
-			}
+			OutputGP4PPDebugString("Individual Cockpit Visor Colours: " + string(individualVisorColours ? "Enabled" : "Disabled"));
 
-			visorColour = 0;
-
-			for (unsigned int i = 0; i < visorBytes.size(); i++)
+			if (individualVisorColours)
 			{
-				if (visorBytes[i] > 255)
+				try
 				{
-					visorBytes[i] = 255;
+					iniFileName = iniSettings["CockpitVisor"]["Ini"].getString();
 				}
-				visorColour += (visorBytes[i] << i * 8);
+				catch (exception ex) {}
+
+				if (iniVisorSettings.load(basePath + iniFileName))
+				{
+					OutputGP4PPDebugString("Loaded Cockpit Visor INI: " + iniFileName);
+
+					for (int i = 1; i <= 22; i++)
+					{
+						glass = defaultGlass;
+
+						glass.LoadGlassSettings(iniVisorSettings, "Cockpit Visor " + to_string(i), "CockpitVisor" + to_string(i));
+
+						visorGlassData.push_back(glass);
+					}
+				}
+				else
+				{
+					individualVisorColours = false;
+
+					OutputGP4PPDebugString("Failed to open Cockpit Visor INI: " + iniFileName);
+				}
+			}
+			else
+			{
+				glass.LoadGlassSettings(iniSettings, "Cockpit Visor", "CockpitVisor");
+
+				visorGlassData.push_back(glass);
 			}
 
-			OutputGP4PPDebugString("Cockpit Visor Colour: B: " + to_string(visorBytes[0]) + " G: " + to_string(visorBytes[1]) + " R: " + to_string(visorBytes[2]) + " A: " + to_string(visorBytes[3]));
+		}
 
+		// Z Cockpit Visor
+		defaultGlass.colour = { 128, 128, 128, 0 };
+		defaultGlass.transparencyMultiplier = 0.3f;
+
+		glass = defaultGlass;
+
+		try
+		{
+			individualZCockpitVisorColours = iniSettings["ZCockpitVisor"]["Individual"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Individual Z Cockpit Visor Colours: " + string(individualZCockpitVisorColours ? "Enabled" : "Disabled"));
+
+		if (individualZCockpitVisorColours)
+		{
 			try
 			{
-				transparencyMultiplier = iniSettings["CockpitVisor"]["Transparency"].getAs<float>();
+				iniFileName = iniSettings["ZCockpitVisor"]["Ini"].getString();
 			}
 			catch (exception ex) {}
 
-			OutputGP4PPDebugString("Cockpit Visor Transparency Multiplier: " + to_string(transparencyMultiplier));
+			if (iniVisorSettings.load(basePath + iniFileName))
+			{
+				OutputGP4PPDebugString("Loaded Cockpit Visor INI: " + iniFileName);
+
+				for (int i = 1; i <= 22; i++)
+				{
+					glass = defaultGlass;
+
+					glass.LoadGlassSettings(iniVisorSettings, "Z Cockpit Visor " + to_string(i), "ZCockpitVisor" + to_string(i));
+					
+					zGlassData.push_back(glass);
+				}
+			}
+			else
+			{
+				individualVisorColours = false;
+
+				OutputGP4PPDebugString("Failed to open Cockpit Visor INI: " + iniFileName);
+			}
+			
 		}
+		if (!individualZCockpitVisorColours)
+		{
+			glass.LoadGlassSettings(iniSettings, "Z Cockpit Visor", "ZCockpitVisor");
+
+			zGlassData.push_back(glass);
+		}
+
 	}
 
 	void ApplyPatches()
@@ -234,6 +363,9 @@ namespace CockpitVisor
 		MemUtils::rerouteFunction(cockpitVisorStartAddress, PtrToUlong(cockpitVisorFunc), VAR_NAME(cockpitVisorFunc));
 
 		//Re-route for cockpit visor 2
-		MemUtils::rerouteFunction(cockpitVisorStartAddress2, PtrToUlong(pitcrewFunc2), VAR_NAME(pitcrewFunc2));
+		MemUtils::rerouteFunction(cockpitVisorStartAddress2, PtrToUlong(cockpitVisorFunc2), VAR_NAME(cockpitVisorFunc2));
+
+		//Re-route for z-cockpit visor
+		MemUtils::rerouteFunction(zCockpitVisorStartAddress, PtrToUlong(zCockpitVisorFunc), VAR_NAME(zCockpitVisorFunc));
 	}
 };

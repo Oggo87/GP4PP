@@ -22,7 +22,8 @@ DWORD WINAPI MainThread(LPVOID param)
 	HMODULE dllHandle = GetModuleHandleA("GP4PP.dll");
 	GetModuleFileNameA(dllHandle, currentPath, MAX_PATH);
 	size_t pos = string(currentPath).find_last_of("\\/");
-	string iniFilePath = string(currentPath).substr(0, pos) + "\\GP4PP.ini";
+	string basePath = string(currentPath).substr(0, pos) + "\\";
+	string iniFilePath = basePath + "GP4PP.ini";
 
 	IniFile iniSettings;
 
@@ -36,7 +37,7 @@ DWORD WINAPI MainThread(LPVOID param)
 		General::LoadSettings(iniSettings);
 
 		// Load Cockpit Visor Settings
-		CockpitVisor::LoadSettings(iniSettings);
+		CockpitVisor::LoadSettings(iniSettings, basePath);
 
 		// Load Asset Settings
 		Assets::LoadSettings(iniSettings);

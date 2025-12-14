@@ -101,6 +101,18 @@ namespace Pitcrew
 
 		OutputGP4PPDebugString("Hi-Res Pitcrews : " + string(hiResMeshes ? "Enabled" : "Disabled"));
 
+		if(hiResMeshes)
+		{
+			// Pitcrews Buffer Size
+			try
+			{
+				d3dBufferSize = iniSettings["Pitcrews"]["CustomD3DBufferSize"].getAs<int>();
+			}
+			catch (exception ex) {}
+
+			OutputGP4PPDebugString("Pitcrews D3D Buffer Size: " + to_string(d3dBufferSize));
+		}
+
 		// Individual Pitcrews
 		try
 		{
@@ -109,15 +121,6 @@ namespace Pitcrew
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Individual Pitcrews : " + string(individualMeshes ? "Enabled" : "Disabled"));
-
-		// Pitcrews Buffer Size
-		try
-		{
-			d3dBufferSize = iniSettings["Pitcrews"]["CustomD3DBufferSize"].getAs<int>();
-		}
-		catch (exception ex) {}
-
-		OutputGP4PPDebugString("Pitcrews D3D Buffer Size: " + to_string(d3dBufferSize));
 	};
 
 	//Target Addresses
