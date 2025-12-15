@@ -164,12 +164,14 @@
     <ClCompile Include="Patches\Assets.cpp" />
     <ClCompile Include="Patches\CockpitVisor.cpp" />
     <ClCompile Include="Patches\General.cpp" />
+    <ClCompile Include="Patches\HelmetVisor.cpp" />
     <ClCompile Include="Patches\Pitcrew.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Patches\Assets.h" />
     <ClInclude Include="Patches\CockpitVisor.h" />
     <ClInclude Include="Patches\General.h" />
+    <ClInclude Include="Patches\HelmetVisor.h" />
     <ClInclude Include="Patches\Pitcrew.h" />
     <ClInclude Include="Utils\BGRA.h" />
     <ClInclude Include="Utils\CGP4Glass.h" />

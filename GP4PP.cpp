@@ -1,5 +1,6 @@
 #include "Patches/General.h"
 #include "Patches/CockpitVisor.h"
+#include "Patches/HelmetVisor.h"
 #include "Patches/Assets.h"
 #include "Patches/Pitcrew.h"
 #include "Utils/Helpers.h"
@@ -37,6 +38,9 @@ DWORD WINAPI MainThread(LPVOID param)
 		// Load Cockpit Visor Settings
 		CockpitVisor::LoadSettings(iniSettings, basePath);
 
+		// Load Helmet Visor Settings
+		HelmetVisor::LoadSettings(iniSettings, basePath);
+
 		// Load Asset Settings
 		Assets::LoadSettings(iniSettings);
 
@@ -59,6 +63,9 @@ DWORD WINAPI MainThread(LPVOID param)
 
 	//Apply Cockpit Visor patches
 	CockpitVisor::ApplyPatches();
+
+	//Apply Helmet Visor patches
+	HelmetVisor::ApplyPatches();
 
 	return 0;
 }

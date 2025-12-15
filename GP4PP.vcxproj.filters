@@ -10,6 +10,8 @@
     </Filter>
     <Filter Include="Patches\Source">
       <UniqueIdentifier>{53386a2f-7c6a-45fd-b590-becd548a3512}</UniqueIdentifier>
+      <Extensions>
+      </Extensions>
     </Filter>
     <Filter Include="Patches\Header">
       <UniqueIdentifier>{aa2935c9-ac4a-46d8-a311-484c14d408c8}</UniqueIdentifier>
@@ -40,6 +42,9 @@
     <ClCompile Include="Patches\Pitcrew.cpp">
       <Filter>Patches\Source</Filter>
     </ClCompile>
+    <ClCompile Include="Patches\HelmetVisor.cpp">
+      <Filter>Patches\Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Patches\Assets.h">
@@ -62,6 +67,9 @@
     </ClInclude>
     <ClInclude Include="Utils\Helpers.h">
       <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\HelmetVisor.h">
+      <Filter>Patches\Header</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
