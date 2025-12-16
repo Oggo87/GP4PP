@@ -38,6 +38,8 @@ namespace HelmetVisor
 
 		OutputGP4PPDebugString("Individual Helmet Visor Colours: " + string(individualHelmetVisorColours ? "Enabled" : "Disabled"));
 
+		defaultGlass.LoadGlassSettings(iniSettings, "Helmet Visor", "HelmetVisor");
+
 		if (individualHelmetVisorColours)
 		{
 			try 
@@ -57,16 +59,13 @@ namespace HelmetVisor
 				OutputGP4PPDebugString("Failed to open Helmet Visor INI: " + iniFileName);
 			}
 		}
-		if(!individualHelmetVisorColours)
-		{
-			glass.LoadGlassSettings(iniSettings, "Helmet Visor", "HelmetVisor");
-		}
 		
 		for (int i = 1; i <= 22; i++)
 		{
+			glass = defaultGlass;
+
 			if(individualHelmetVisorColours)
 			{
-				glass = defaultGlass;
 
 				glass.LoadGlassSettings(iniVisorSettings, "Helmet Visor " + to_string(i), "HelmetVisor" + to_string(i));
 			}

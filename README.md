@@ -8,10 +8,11 @@ This DLL, formerly known as *Individual Meshes And Textures*, expands original G
 
 Additionally, it includes and expands on features originally found in [*High Resolution Pitcrews for Grand Prix 4* (`HiResPitcrew.dll`)](https://github.com/Oggo87/HiResPitcrew), both overcoming the limitation of 400 vertices in the original game, allowing high resolution pitcrew meshes to be used, and introducing support for per-team pitcrew meshes.
 
+It also includes options to fully control cockpit and helmet visor colours and transparency, and enable the use of GP4's built-in visor shader in the cockpit mesh.
+
 Other features include:
-* Disabling the built-in check for an optical drive
 * Fixing the reversed tyre tread bug when using 3D rims
-* Using the built-in visor shader in the cockpit mesh
+* Disabling the built-in check for an optical drive
 
 See [Usage](#Usage) for more info.
 
@@ -50,15 +51,14 @@ Under the *DLLs* tab, add an entry pointing to `GP4PP.dll`. Make sure that `GP4P
 
 All settings are contained in `GP4PP.ini` and everything is designed to revert back to default GP4 behaviour, including if `GP4PP.ini` itself missing. The `GP4PP.ini` file that is included with the release is also pre-configured to mimic GP4's default behaviour.
 
-`GP4PP.ini` is divided in 5 logical sections: 
+`GP4PP.ini` is divided in 4 logical sections: 
 
-* [Settings](#Settings)
+* [General Settings](#General-Settings)
+* [Visor Settings](#Visor-Settings)
 * [Pitcrew Settings](#Pitcrew-Settings)
-* [Individual Meshes](#Individual-Meshes)
-* [LOD Table](#LOD-Table)
 * [Assets Settings](#Assets-Settings)
 
-#### Settings
+#### General Settings
 This section contains four entries:
 
 * [Disable CD Check](#Disable-CD-Check)
@@ -109,9 +109,9 @@ cars\track15\car_ferrari_car1_lod_0.gp4
 
 ##### Cockpit Visor
 
-This setting allows to enable using GP4's built-in visor shader in the cockpit mesh. In combination with the entries in the ```CockpitVisor``` section, it's possible to specify the ```ObjectName``` to apply the visor shader to, the ```Colour``` (in ```0-255 BGRA``` format),  and ```Transparency``` (a ```float``` value). The Alpha component of the ```Colour``` and the ```Transparency``` value work combinedly to set the visor's transparency.
+This setting allows to enable using GP4's built-in visor shader in the cockpit mesh. In combination with the entries in the ```CockpitVisor``` section, it's possible to specify the ```ObjectName``` to apply the visor shader to, the ```Colour```,  and ```Transparency```. See [Visor Settings](#Visor-Settings) for more details.
 
-Example - Cockpit Visor enabled, using object named `Visor`, with a grey colour and 50% transparency
+Example - Cockpit Visor enabled, using object named `Visor`, with a grey colour and 50% transparency, for all cars
 
 ```ini
 [Settings]
@@ -119,6 +119,7 @@ CockpitVisor = true
 
 [CockpitVisor]
 ObjectName = Visor
+Individual = false
 Colour = 128, 128, 128, 0
 Transparency = 0.5
 ```
@@ -128,6 +129,56 @@ Transparency = 0.5
 This setting allows to enable using GP4's built-in advanced car shader (the same one used for cars and helmets) for the in-cockpit steering wheel mesh, improving its appearance with better reflections and lighting effects.
 
 Advanced Car Shader does not support alpha-blending, so if the steering wheel mesh uses any alpha-blending textures (for example, for cutouts or holes in the mesh), those parts will appear fully opaque when this setting is enabled. It is intended to be used with full 3D steering wheel meshes that do not rely on alpha-blending.
+
+#### Visor Settings
+
+These sections contain entries to set the colour and transparency of both helmet and cockpit visors. ```CockpitVisor``` settings are applied to the in-cockpit visor when the corresponding setting in the ```Settings``` section is enabled, ```ZCockpitVisor``` and ```HelmetVisor``` settings are always applied to ```z_cockpit_visor``` objects in the car mesh and helmet visors respectively.
+
+For each section, it's possible to specify whether the settings are applied individually (when ```Individual``` is set to ```true```/```1```), or globally for all cars (when ```Individual``` is set to ```false```/```0```).
+
+When not using individual settings, it's possible to specify the ```Colour``` (in ```0-255 BGRA``` format),  and ```Transparency``` (a ```float``` value) that will be applied to all cars. The Alpha component of the ```Colour``` and the ```Transparency``` value work combinedly to set the visor's transparency. These settings will also be used as default values when using individual settings and a car doesn't have specific entries in the specified INI file.
+
+When using individual settings, it's possible to specify different colours and transparency values for each team by creating a separate INI file, specified in the ```Ini``` entry. The INI file needs to contain one section per car, named sequentially 1-22, with the same ```Colour``` and ```Transparency``` entries as above.
+
+Example - Global settings for all visors
+
+```ini
+[CockpitVisor]
+ObjectName = Visor
+Individual = false
+Colour = 128, 128, 128, 0
+Transparency = 0.5
+Ini = VisorColours.ini
+
+[ZCockpitVisor]
+Individual = false
+Colour = 128, 128, 128, 0
+Transparency = 0.3
+Ini = VisorColours.ini
+
+[HelmetVisor]
+Individual = true
+Colour = 0, 0, 0, 0
+Transparency = 0.5
+Ini = VisorColours.ini
+```
+
+Example - Individual settings for visors
+
+```ini
+[ZCockpitVisor1]
+Colour = 128, 128, 128, 0
+Transparency = 0.5
+
+[CockpitVisor4]
+Colour = 128, 128, 128, 0
+Transparency = 0.3
+
+[HelmetVisor14]
+Colour = 0, 30, 50, 0
+Transparency = 0.65
+
+```
 
 #### Pitcrew Settings
 
@@ -204,7 +255,15 @@ MarshallLo.mdb
 ##### Custom D3D Buffer Size
 This setting allows to specify a custom size (in either decimal or hexadecimal format) for the Direct3D buffer used to load pitcrew meshes. By default, GP4 uses a 0x4000 (16384 bytes) buffer, which works fine for the original low-poly pitcrew meshes, but not enough for high resolution pitcrew meshes. Some instability issues may arise if the buffer size is too large, hence the default setting in `GP4PP.ini` is set to 0x400000 (4 megabytes), which should be enough for most high resolution pitcrew meshes. If `HiResMeshes` is set to `false`, this setting is ignored and GP4's default buffer size is used.
 
-#### Individual Meshes
+#### Assets Settings
+
+These sections contain entries to control how meshes and textures are loaded in GP4. There are three types of sections:
+
+* [Individual Meshes](#Individual-Meshes)
+* [LOD Table](#LOD-Table)
+* [Assets Sections](#Assets-Sections)
+
+##### Individual Meshes
 
 This section contains entries to enable individual mesh loading for mesh types that are generic by default in GP4: Front Wheels, Rear Wheels, Helmets and Cockpits. Entries can be set to `true` / `false` or `1` / `0`.
 
@@ -218,7 +277,7 @@ Helmets = false
 Cockpits = false
 ```
 
-#### LOD Table
+##### LOD Table
 This section allows to specify which LODs (Levels of Detail) will be used by each mesh type. GP4 allows a maximum of 5 LODs per mesh type. `GP4PP.dll` will automatically exclude all 0 values at the _end_ of each entry, and will also 0-fill any entries that contain less than 5 values, guaranteeing full compatibility with GP4 internal loading. 
 
 ```ini
@@ -230,7 +289,7 @@ Cockpits	=	0,	0,	0,	0,	0
 Cars		=	0,	1,	2,	3,	4
 ```
 
-#### Assets Settings
+##### Assets Sections
 
 These sections are, more specifically:
 
@@ -361,7 +420,12 @@ Diego "Öggo" Noriega
 
 ## Version History
 
-* 2.0
+* 2.1
+    * Added settings for external cockpit and helmet visor colours and transparency
+    * Added settings to enable individual colour and transparency per car for cockpit and helmet visors
+    * Some bug fixes and improvements
+
+* * 2.0
     * First release as GP4++
     * Major refactor of the codebase
     * Merged HiResPitcrew.dll functionality into GP4PP.dll
@@ -370,16 +434,16 @@ Diego "Öggo" Noriega
     * Added patch to enable advanced car shader for in-cockpit steering wheel mesh
 
 * 1.4
-    * Update - Added fix for reversed tyre tread bug when using 3D rims
+    * Added fix for reversed tyre tread bug when using 3D rims
 
 * 1.3
-    * Update - Enable using GP4 Visor Shader for cockpit mesh
+    * Enable using GP4 Visor Shader for cockpit mesh
 
 * 1.2
-    * Update - Added collision mesh assets
+    * Added collision mesh assets
 
 * 1.1
-    * Update - Fall-back track slots
+    * Fall-back track slots
 
 * 1.0
     * First Release

@@ -250,8 +250,6 @@ namespace CockpitVisor
 			defaultGlass.colour = { 128, 128, 128, 0 };
 			defaultGlass.transparencyMultiplier = 0.5f;
 
-			glass = defaultGlass;
-
 			try
 			{
 				visorObjectName = iniSettings["CockpitVisor"]["ObjectName"].getString();
@@ -267,6 +265,8 @@ namespace CockpitVisor
 			catch (exception ex) {}
 
 			OutputGP4PPDebugString("Individual Cockpit Visor Colours: " + string(individualVisorColours ? "Enabled" : "Disabled"));
+
+			defaultGlass.LoadGlassSettings(iniSettings, "Cockpit Visor", "CockpitVisor");
 
 			if (individualVisorColours)
 			{
@@ -298,9 +298,8 @@ namespace CockpitVisor
 			}
 			else
 			{
-				glass.LoadGlassSettings(iniSettings, "Cockpit Visor", "CockpitVisor");
 
-				visorGlassData.push_back(glass);
+				visorGlassData.push_back(defaultGlass);
 			}
 
 		}
@@ -309,8 +308,6 @@ namespace CockpitVisor
 		defaultGlass.colour = { 128, 128, 128, 0 };
 		defaultGlass.transparencyMultiplier = 0.3f;
 
-		glass = defaultGlass;
-
 		try
 		{
 			individualZCockpitVisorColours = iniSettings["ZCockpitVisor"]["Individual"].getAs<bool>();
@@ -318,6 +315,8 @@ namespace CockpitVisor
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Individual Z Cockpit Visor Colours: " + string(individualZCockpitVisorColours ? "Enabled" : "Disabled"));
+
+		defaultGlass.LoadGlassSettings(iniSettings, "Z Cockpit Visor", "ZCockpitVisor");
 
 		if (individualZCockpitVisorColours)
 		{
@@ -350,9 +349,7 @@ namespace CockpitVisor
 		}
 		if (!individualZCockpitVisorColours)
 		{
-			glass.LoadGlassSettings(iniSettings, "Z Cockpit Visor", "ZCockpitVisor");
-
-			zGlassData.push_back(glass);
+			zGlassData.push_back(defaultGlass);
 		}
 
 	}
