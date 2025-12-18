@@ -22,9 +22,33 @@
     <Filter Include="Utils">
       <UniqueIdentifier>{c0ec61e7-d2b9-4de1-a735-23e75a613f0a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Docs">
+      <UniqueIdentifier>{94dc57fd-5a0c-480b-90ad-b080cc43f447}</UniqueIdentifier>
+      <Extensions>md</Extensions>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md" />
+    <None Include="README.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Assets-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\CHANGELOG.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\General-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Getting-Started.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Pitcrew-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Visor-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GP4PP.cpp">

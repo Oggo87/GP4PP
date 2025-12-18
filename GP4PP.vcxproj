@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -149,6 +149,12 @@
     <CopyFileToFolders Include="Ini\VisorColours.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
+    <None Include="docs\Assets-Settings.md" />
+    <None Include="docs\CHANGELOG.md" />
+    <None Include="docs\General-Settings.md" />
+    <None Include="docs\Getting-Started.md" />
+    <None Include="docs\Pitcrew-Settings.md" />
+    <None Include="docs\Visor-Settings.md" />
     <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
