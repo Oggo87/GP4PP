@@ -13,6 +13,7 @@ namespace Pitcrew
 {
 	// Settings variables
 	bool hiResMeshes = false;
+	bool individualTextures = false;
 	bool individualMeshes = false;
 	int d3dBufferSize = 0x4000;
 };
@@ -113,7 +114,16 @@ namespace Pitcrew
 			OutputGP4PPDebugString("Pitcrews D3D Buffer Size: " + to_string(d3dBufferSize));
 		}
 
-		// Individual Pitcrews
+		// Individual Pitcrew Textures
+		try
+		{
+			individualTextures = iniSettings["Pitcrews"]["IndividualTextures"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Individual Engineer Textures : " + string(individualTextures ? "Enabled" : "Disabled"));
+
+		// Individual Pitcrew Meshes
 		try
 		{
 			individualMeshes = iniSettings["Pitcrews"]["IndividualMeshes"].getAs<bool>();
@@ -127,10 +137,23 @@ namespace Pitcrew
 	DWORD pitcrewStartAddress = 0x004F8A89;
 	DWORD pitcrewStartAddress2 = 0x004f7961;
 
+	DWORD pitcrewTextureStartAddress1 = 0x004f89fa;
+	DWORD pitcrewTextureStartAddress2 = 0x004f896b;
+	DWORD pitcrewTextureStartAddress3 = 0x004f89ac;
+	DWORD pitcrewTextureStartAddress4 = 0x004f78c6;
+	DWORD pitcrewTextureStartAddress5 = 0x004f7878;
+
 	//Jump Back Addresses
 	DWORD pitcrewJumpBackAddress = 0x004f8a9c;
 	DWORD pitcrewJumpBackAddress2 = 0x004f7974;
 
+	DWORD pitcrewTextureJumpBackAddress1 = 0x004f8a03;
+	DWORD pitcrewTextureJumpBackAddress2 = 0x004f8974;
+	DWORD pitcrewTextureJumpBackAddress3 = 0x004f89b5;
+	DWORD pitcrewTextureJumpBackAddress4 = 0x004f78cf;
+	DWORD pitcrewTextureJumpBackAddress5 = 0x004f7881;
+
+	//Vars and Data Addresses
 	DWORD useRaceAnimFolderAddress = 0x00aa1b54;
 
 	int mdbSlotIndex;
@@ -225,6 +248,160 @@ namespace Pitcrew
 		__asm jmp pitcrewJumpBackAddress2 //jump back into regular flow
 	}
 
+	__declspec(naked) void pitcrewTextureFunc1()
+	{
+		//Original instructions
+		__asm mov DL, byte ptr[EAX + 0x1f9c]
+
+		RegUtils::saveVolatileRegisters();
+
+		//Read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		if (useRaceAnimFolder)
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Original instruction
+			//Index 0xb (11) - Marshall
+			__asm mov ECX, dword ptr[ECX + 0x2c]
+		}
+		else
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Modified instruction
+			//Index 0x16 (22) - Marshall
+			__asm mov ECX, dword ptr[ECX + 0x58]
+		}
+
+		//Jump back into regular flow
+		__asm jmp pitcrewTextureJumpBackAddress1
+	}
+
+	__declspec(naked) void pitcrewTextureFunc2()
+	{
+		//Original instructions
+		__asm mov EAX, dword ptr[EBP + 0x1e8]
+
+		RegUtils::saveVolatileRegisters();
+
+		//Read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		if (useRaceAnimFolder)
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Original instruction
+			//Index 0xc (12) - Race Director
+			__asm mov ECX, dword ptr[EAX + 0x30]
+		}
+		else
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Modified instruction
+			//Index 0x17 (23) - Race Director
+			__asm mov ECX, dword ptr[EAX + 0x5c]
+		}
+
+		//Jump back into regular flow
+		__asm jmp pitcrewTextureJumpBackAddress2
+	}
+
+	__declspec(naked) void pitcrewTextureFunc3()
+	{
+		//Original instructions
+		__asm mov DL, byte ptr[EAX + 0x1f9c]
+
+		RegUtils::saveVolatileRegisters();
+
+		//Read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		if (useRaceAnimFolder)
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Original instruction
+			//Index 0xb (11) - Marshall
+			__asm mov ECX, dword ptr[ECX + 0x2c]
+		}
+		else
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Modified instruction
+			//Index 0x16 (22) - Marshall
+			__asm mov ECX, dword ptr[ECX + 0x58]
+		}
+
+		//Jump back into regular flow
+		__asm jmp pitcrewTextureJumpBackAddress3
+	}
+
+	__declspec(naked) void pitcrewTextureFunc4()
+	{
+		//Original instructions
+		__asm mov EAX, dword ptr[EBP + 0x1e8]
+
+		RegUtils::saveVolatileRegisters();
+
+		//Read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		if (useRaceAnimFolder)
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Original instruction
+			//Index 0xb (11) - Marshall
+			__asm mov ECX, dword ptr[EAX + 0x2c]
+		}
+		else
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Modified instruction
+			//Index 0x16 (22) - Marshall
+			__asm mov ECX, dword ptr[EAX + 0x58]
+		}
+
+		//Jump back into regular flow
+		__asm jmp pitcrewTextureJumpBackAddress4
+	}
+
+	__declspec(naked) void pitcrewTextureFunc5()
+	{
+		//Original instructions
+		__asm mov EAX, dword ptr[EBP + 0x1e8]
+
+		RegUtils::saveVolatileRegisters();
+
+		//Read necessary variables from memory
+		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
+
+		if (useRaceAnimFolder)
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Original instruction
+			//Index 0xc (12) - Race Director
+			__asm mov ECX, dword ptr[EAX + 0x30]
+		}
+		else
+		{
+			RegUtils::restoreVolatileRegisters();
+
+			//Modified instruction
+			//Index 0x17 (23) - Race Director
+			__asm mov ECX, dword ptr[EAX + 0x5c]
+		}
+
+		//Jump back into regular flow
+		__asm jmp pitcrewTextureJumpBackAddress5
+	}
 
 	void ApplyPatches()
 	{
@@ -232,6 +409,42 @@ namespace Pitcrew
 		if (hiResMeshes)
 		{
 			ApplyHiResMeshesPatch();
+		}
+
+		if (individualTextures)
+		{
+			DWORD targetAddress1 = 0x004f7918;
+			DWORD targetAddress2 = 0x004f8a40;
+
+			//Patch exe to skip over to always using anim slot index as texture slot index
+			// 
+			//During race sessions, only 11 anim slots are used (one per team)
+			//During non-race sessions, 22 anim slots are used (one per car)
+			//This enables as many textures as slot indices, allowing individual textures for each engineer during non-race sessions
+
+			BYTE patch[] = { 0xeb, 0x00 }; //jmp to next instruction
+			MemUtils::patchAddress((LPVOID)targetAddress1, patch, sizeof(patch));
+			MemUtils::patchAddress((LPVOID)targetAddress2, patch, sizeof(patch));
+
+			//Patch exe to use correct indices for marshall and race director textures
+			// 
+			//Race session: 0xb (11) Marshall and 0xc (12) Race Director
+			//Non-race session: 0x16 (22) Marshall and 0x17 (23) Race Director
+
+			//Re-route for pitcrew texture function 1
+			MemUtils::rerouteFunction(pitcrewTextureStartAddress1, PtrToUlong(pitcrewTextureFunc1), VAR_NAME(pitcrewTextureFunc1));
+
+			//Re-route for pitcrew texture function 2
+			MemUtils::rerouteFunction(pitcrewTextureStartAddress2, PtrToUlong(pitcrewTextureFunc2), VAR_NAME(pitcrewTextureFunc2));
+
+			//Re-route for pitcrew texture function 3
+			MemUtils::rerouteFunction(pitcrewTextureStartAddress3, PtrToUlong(pitcrewTextureFunc3), VAR_NAME(pitcrewTextureFunc3));
+
+			//Re-route for pitcrew texture function 4
+			MemUtils::rerouteFunction(pitcrewTextureStartAddress4, PtrToUlong(pitcrewTextureFunc4), VAR_NAME(pitcrewTextureFunc4));
+
+			//Re-route for pitcrew texture function 5
+			MemUtils::rerouteFunction(pitcrewTextureStartAddress5, PtrToUlong(pitcrewTextureFunc5), VAR_NAME(pitcrewTextureFunc5));
 		}
 
 		if (individualMeshes)
