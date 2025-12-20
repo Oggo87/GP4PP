@@ -1,11 +1,12 @@
 # Version History
 
 * 2.1
+    * Added support for per-driver pitcrew textures ==**for engineers only**==
     * Added settings for external cockpit and helmet visor colours and transparency
-    * Added settings to enable individual colour and transparency per car for cockpit and helmet visors
+    * Added settings for individual colour and transparency per car for cockpit and helmet visors
     * Some bug fixes and improvements
 
-* * 2.0
+* 2.0
     * First release as GP4++
     * Major refactor of the codebase
     * Merged HiResPitcrew.dll functionality into GP4PP.dll
