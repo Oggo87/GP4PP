@@ -42,7 +42,7 @@ namespace HelmetVisor
 
 		if (individualHelmetVisorColours)
 		{
-			try 
+			try
 			{
 				iniFileName = iniSettings["HelmetVisor"]["Ini"].getString();
 			}
@@ -59,12 +59,12 @@ namespace HelmetVisor
 				OutputGP4PPDebugString("Failed to open Helmet Visor INI: " + iniFileName);
 			}
 		}
-		
+
 		for (int i = 1; i <= 22; i++)
 		{
 			glass = defaultGlass;
 
-			if(individualHelmetVisorColours)
+			if (individualHelmetVisorColours)
 			{
 
 				glass.LoadGlassSettings(iniVisorSettings, "Helmet Visor " + to_string(i), "HelmetVisor" + to_string(i));

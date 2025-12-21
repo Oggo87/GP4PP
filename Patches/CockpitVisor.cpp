@@ -217,12 +217,12 @@ namespace CockpitVisor
 		//Set Shader Parameters
 		//Colour
 		colour = zGlassData[driverIndex].colour;
-		MemUtils::patchAddress((LPVOID)(zShaderParams), (BYTE*)&(colour), 4);
+		MemUtils::patchAddress((LPVOID)(zShaderParams), MemUtils::toBytes<DWORD>(colour), sizeof(DWORD));
 
 		//MemUtils::patchAddress((LPVOID)(zShaderParams), (BYTE*)(&(zGlassData[driverIndex].colour)), 4);
 
 		//Multiplier
-		MemUtils::patchAddress((LPVOID)(zShaderParams + 4), (BYTE*)&(zGlassData[driverIndex].transparencyMultiplier), 4);
+		MemUtils::patchAddress((LPVOID)(zShaderParams + 4), MemUtils::toBytes<float>(zGlassData[driverIndex].transparencyMultiplier), sizeof(float));
 
 		RegUtils::restoreVolatileRegisters();
 
@@ -335,7 +335,7 @@ namespace CockpitVisor
 					glass = defaultGlass;
 
 					glass.LoadGlassSettings(iniVisorSettings, "Z Cockpit Visor " + to_string(i), "ZCockpitVisor" + to_string(i));
-					
+
 					zGlassData.push_back(glass);
 				}
 			}
@@ -345,7 +345,7 @@ namespace CockpitVisor
 
 				OutputGP4PPDebugString("Failed to open Cockpit Visor INI: " + iniFileName);
 			}
-			
+
 		}
 		if (!individualZCockpitVisorColours)
 		{

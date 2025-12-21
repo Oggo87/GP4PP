@@ -92,7 +92,7 @@ namespace General
 
 		__asm lea ECX, [ESP + 0xdc] //original instruction
 
-		_asm jmp wheelShaderSetMatrixJumpBackAddress //jump back into regular flow
+			_asm jmp wheelShaderSetMatrixJumpBackAddress //jump back into regular flow
 	}
 
 	void LoadSettings(IniFile iniSettings)
@@ -132,7 +132,7 @@ namespace General
 		{
 			//Patch exe to always return 1 when checking for optical drive
 			BYTE retVal = 0x01;
-			MemUtils::patchAddress((LPVOID)0x0053712B, (BYTE*)&retVal, sizeof(BYTE));
+			MemUtils::patchAddress((LPVOID)0x0053712B, MemUtils::toBytes<BYTE>(retVal), sizeof(BYTE));
 		}
 
 		// Apply Fix 3D Wheels Tread Mapping Patch
@@ -158,8 +158,8 @@ namespace General
 		{
 			//Patch to set the steering wheel in cockpit view to use the advanced car shader (0x12)
 			DWORD carShaderPatchAddress = 0x0046faf3;
-			BYTE carShaderPatch = { 0x12 }; 
-			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, (BYTE*)&carShaderPatch, sizeof(BYTE));
+			BYTE carShaderPatch = { 0x12 };
+			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
 		}
 	};
 };

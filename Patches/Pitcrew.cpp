@@ -31,7 +31,7 @@ namespace {
 
 		ostringstream messageBuilder;
 
-		char* pitcrewVertexBuffer = (char*)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		LPBYTE pitcrewVertexBuffer = (LPBYTE)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!pitcrewVertexBuffer) {
 			OutputGP4PPDebugString("Error allocating memory for new Vertex Buffer");
 			return 1;
@@ -45,14 +45,14 @@ namespace {
 		OutputGP4PPDebugString("Address of new Vertex Buffer: " + messageBuilder.str());
 
 		//Patch exe for new vertex buffer
-		MemUtils::patchAddress((LPVOID)0x004F929A, (BYTE*)&pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F92F5, (BYTE*)&pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F929A, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92F5, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
 		pitcrewVertexBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F92FE, (BYTE*)&pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92FE, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
 		pitcrewVertexBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F9307, (BYTE*)&pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F9307, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
 
-		char* pitcrewNormalsBuffer = (char*)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		LPBYTE pitcrewNormalsBuffer = (LPBYTE)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!pitcrewNormalsBuffer) {
 			OutputGP4PPDebugString("Error allocating memory for new Normals Buffer");
 			return 1;
@@ -66,23 +66,23 @@ namespace {
 		OutputGP4PPDebugString("Address of new Normals Buffer: " + messageBuilder.str());
 
 		//Patch exe for new normals buffer
-		MemUtils::patchAddress((LPVOID)0x004F92A1, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F8187, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F92D8, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92A1, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F8187, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92D8, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
 		pitcrewNormalsBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F92E4, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F81AB, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92E4, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F81AB, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
 		pitcrewNormalsBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F92ED, (BYTE*)&pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92ED, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
 
 		//Patch exe for larger D3D allocated memory space
-		MemUtils::patchAddress((LPVOID)0x004F2CA6, (BYTE*)&d3dBufferSize, sizeof(int));
+		MemUtils::patchAddress((LPVOID)0x004F2CA6, MemUtils::toBytes<int>(d3dBufferSize), sizeof(int));
 
 		//Patch exe to avoid recursion CTD in AnimSetData::meth_0x4f2130
 		//It should really be converted to a non-recursive function
 		//but for now just patching the jump to always taken
 		byte jmp = 0xEB;
-		MemUtils::patchAddress((LPVOID)0x004F21B6, (BYTE*)&jmp, sizeof(byte));
+		MemUtils::patchAddress((LPVOID)0x004F21B6, MemUtils::toBytes<BYTE>(jmp), sizeof(BYTE));
 
 		return 0;
 	}
@@ -102,7 +102,7 @@ namespace Pitcrew
 
 		OutputGP4PPDebugString("Hi-Res Pitcrews : " + string(hiResMeshes ? "Enabled" : "Disabled"));
 
-		if(hiResMeshes)
+		if (hiResMeshes)
 		{
 			// Pitcrews Buffer Size
 			try
@@ -253,7 +253,7 @@ namespace Pitcrew
 		//Original instructions
 		__asm mov DL, byte ptr[EAX + 0x1f9c]
 
-		RegUtils::saveVolatileRegisters();
+			RegUtils::saveVolatileRegisters();
 
 		//Read necessary variables from memory
 		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
@@ -284,7 +284,7 @@ namespace Pitcrew
 		//Original instructions
 		__asm mov EAX, dword ptr[EBP + 0x1e8]
 
-		RegUtils::saveVolatileRegisters();
+			RegUtils::saveVolatileRegisters();
 
 		//Read necessary variables from memory
 		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
@@ -315,7 +315,7 @@ namespace Pitcrew
 		//Original instructions
 		__asm mov DL, byte ptr[EAX + 0x1f9c]
 
-		RegUtils::saveVolatileRegisters();
+			RegUtils::saveVolatileRegisters();
 
 		//Read necessary variables from memory
 		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
@@ -346,7 +346,7 @@ namespace Pitcrew
 		//Original instructions
 		__asm mov EAX, dword ptr[EBP + 0x1e8]
 
-		RegUtils::saveVolatileRegisters();
+			RegUtils::saveVolatileRegisters();
 
 		//Read necessary variables from memory
 		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
@@ -377,7 +377,7 @@ namespace Pitcrew
 		//Original instructions
 		__asm mov EAX, dword ptr[EBP + 0x1e8]
 
-		RegUtils::saveVolatileRegisters();
+			RegUtils::saveVolatileRegisters();
 
 		//Read necessary variables from memory
 		useRaceAnimFolder = MemUtils::addressToValue<bool>(useRaceAnimFolderAddress);
@@ -460,14 +460,14 @@ namespace Pitcrew
 			byte lowResMarshallIndex = 0x17; // 23
 
 			// First function
-			MemUtils::patchAddress((LPVOID)0x004F8A32, (BYTE*)&lowResMarshallIndex, sizeof(byte));
-			MemUtils::patchAddress((LPVOID)0x004F89e4, (BYTE*)&lowResMarshallIndex, sizeof(byte));
-			MemUtils::patchAddress((LPVOID)0x004F895C, (BYTE*)&lowResMarshallIndex, sizeof(byte));
+			MemUtils::patchAddress((LPVOID)0x004F8A32, MemUtils::toBytes<BYTE>(lowResMarshallIndex), sizeof(BYTE));
+			MemUtils::patchAddress((LPVOID)0x004F89e4, MemUtils::toBytes<BYTE>(lowResMarshallIndex), sizeof(BYTE));
+			MemUtils::patchAddress((LPVOID)0x004F895C, MemUtils::toBytes<BYTE>(lowResMarshallIndex), sizeof(BYTE));
 
 			// Second function
-			MemUtils::patchAddress((LPVOID)0x004F790A, (BYTE*)&lowResMarshallIndex, sizeof(byte));
-			MemUtils::patchAddress((LPVOID)0x004F78BC, (BYTE*)&lowResMarshallIndex, sizeof(byte));
-			MemUtils::patchAddress((LPVOID)0x004F7869, (BYTE*)&lowResMarshallIndex, sizeof(byte));
+			MemUtils::patchAddress((LPVOID)0x004F790A, MemUtils::toBytes<BYTE>(lowResMarshallIndex), sizeof(BYTE));
+			MemUtils::patchAddress((LPVOID)0x004F78BC, MemUtils::toBytes<BYTE>(lowResMarshallIndex), sizeof(BYTE));
+			MemUtils::patchAddress((LPVOID)0x004F7869, MemUtils::toBytes<BYTE>(lowResMarshallIndex), sizeof(BYTE));
 		}
 
 
