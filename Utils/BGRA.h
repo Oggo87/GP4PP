@@ -97,8 +97,8 @@ namespace GP4PP
 		{
 			bytes = newBytes;
 			colour = 0;
-			// Ensure we only use the first 4 bytes
-			for (unsigned int i = 0; i < bytes.size() && i < 4; i++)
+
+			for (unsigned int i = 0; i < bytes.size(); i++)
 			{
 				if (bytes[i] > 255)
 				{
