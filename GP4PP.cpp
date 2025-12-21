@@ -1,11 +1,10 @@
-#include "Assets.h"
-#include "CockpitVisor.h"
-#include "General.h"
-#include "Helpers.h"
+#include "Patches/General.h"
+#include "Patches/CockpitVisor.h"
+#include "Patches/HelmetVisor.h"
+#include "Patches/Assets.h"
+#include "Patches/Pitcrew.h"
+#include "Utils/Helpers.h"
 #include "IniLib/IniLib.h"
-#include <libloaderapi.h>
-#include "Pitcrew.h"
-#include <processthreadsapi.h>
 #include <string>
 #include <windows.h>
 
@@ -22,7 +21,8 @@ DWORD WINAPI MainThread(LPVOID param)
 	HMODULE dllHandle = GetModuleHandleA("GP4PP.dll");
 	GetModuleFileNameA(dllHandle, currentPath, MAX_PATH);
 	size_t pos = string(currentPath).find_last_of("\\/");
-	string iniFilePath = string(currentPath).substr(0, pos) + "\\GP4PP.ini";
+	string basePath = string(currentPath).substr(0, pos) + "\\";
+	string iniFilePath = basePath + "GP4PP.ini";
 
 	IniFile iniSettings;
 
@@ -36,7 +36,10 @@ DWORD WINAPI MainThread(LPVOID param)
 		General::LoadSettings(iniSettings);
 
 		// Load Cockpit Visor Settings
-		CockpitVisor::LoadSettings(iniSettings);
+		CockpitVisor::LoadSettings(iniSettings, basePath);
+
+		// Load Helmet Visor Settings
+		HelmetVisor::LoadSettings(iniSettings, basePath);
 
 		// Load Asset Settings
 		Assets::LoadSettings(iniSettings);
@@ -60,6 +63,9 @@ DWORD WINAPI MainThread(LPVOID param)
 
 	//Apply Cockpit Visor patches
 	CockpitVisor::ApplyPatches();
+
+	//Apply Helmet Visor patches
+	HelmetVisor::ApplyPatches();
 
 	return 0;
 }

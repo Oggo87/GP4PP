@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -143,16 +143,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Assets.cpp" />
-    <ClCompile Include="CockpitVisor.cpp" />
-    <ClCompile Include="General.cpp" />
-    <ClCompile Include="GP4PP.cpp" />
-    <ClCompile Include="Pitcrew.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <CopyFileToFolders Include="GP4PP.ini">
+    <CopyFileToFolders Include="Ini\GP4PP.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="Ini\VisorColours.ini">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <None Include="docs\Assets-Settings.md" />
+    <None Include="docs\CHANGELOG.md" />
+    <None Include="docs\General-Settings.md" />
+    <None Include="docs\Getting-Started.md" />
+    <None Include="docs\Pitcrew-Settings.md" />
+    <None Include="docs\Visor-Settings.md" />
     <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
@@ -164,11 +166,22 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Assets.h" />
-    <ClInclude Include="CockpitVisor.h" />
-    <ClInclude Include="General.h" />
-    <ClInclude Include="Helpers.h" />
-    <ClInclude Include="Pitcrew.h" />
+    <ClCompile Include="GP4PP.cpp" />
+    <ClCompile Include="Patches\Assets.cpp" />
+    <ClCompile Include="Patches\CockpitVisor.cpp" />
+    <ClCompile Include="Patches\General.cpp" />
+    <ClCompile Include="Patches\HelmetVisor.cpp" />
+    <ClCompile Include="Patches\Pitcrew.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Patches\Assets.h" />
+    <ClInclude Include="Patches\CockpitVisor.h" />
+    <ClInclude Include="Patches\General.h" />
+    <ClInclude Include="Patches\HelmetVisor.h" />
+    <ClInclude Include="Patches\Pitcrew.h" />
+    <ClInclude Include="Utils\BGRA.h" />
+    <ClInclude Include="Utils\CGP4Glass.h" />
+    <ClInclude Include="Utils\Helpers.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

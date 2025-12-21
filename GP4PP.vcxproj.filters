@@ -5,35 +5,103 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
+    <Filter Include="Patches">
+      <UniqueIdentifier>{3af01be4-cf1a-48a6-86ea-ce9e79f1f6e4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Patches\Source">
+      <UniqueIdentifier>{53386a2f-7c6a-45fd-b590-becd548a3512}</UniqueIdentifier>
+      <Extensions>
+      </Extensions>
+    </Filter>
+    <Filter Include="Patches\Header">
+      <UniqueIdentifier>{aa2935c9-ac4a-46d8-a311-484c14d408c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Ini">
+      <UniqueIdentifier>{77596024-4c59-4700-8355-c33a0582635a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Utils">
+      <UniqueIdentifier>{c0ec61e7-d2b9-4de1-a735-23e75a613f0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Docs">
+      <UniqueIdentifier>{94dc57fd-5a0c-480b-90ad-b080cc43f447}</UniqueIdentifier>
+      <Extensions>md</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Assets-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\CHANGELOG.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\General-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Getting-Started.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Pitcrew-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="docs\Visor-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GP4PP.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="Pitcrew.cpp">
-      <Filter>Source</Filter>
+    <ClCompile Include="Patches\Assets.cpp">
+      <Filter>Patches\Source</Filter>
     </ClCompile>
-    <ClCompile Include="CockpitVisor.cpp">
-      <Filter>Source</Filter>
+    <ClCompile Include="Patches\CockpitVisor.cpp">
+      <Filter>Patches\Source</Filter>
     </ClCompile>
-    <ClCompile Include="General.cpp">
-      <Filter>Source</Filter>
+    <ClCompile Include="Patches\General.cpp">
+      <Filter>Patches\Source</Filter>
     </ClCompile>
-    <ClCompile Include="Assets.cpp">
-      <Filter>Source</Filter>
+    <ClCompile Include="Patches\Pitcrew.cpp">
+      <Filter>Patches\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Patches\HelmetVisor.cpp">
+      <Filter>Patches\Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md" />
+    <ClInclude Include="Patches\Assets.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\General.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\Pitcrew.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\CockpitVisor.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils\BGRA.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils\CGP4Glass.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils\Helpers.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\HelmetVisor.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="GP4PP.ini" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Pitcrew.h" />
-    <ClInclude Include="Helpers.h" />
-    <ClInclude Include="CockpitVisor.h" />
-    <ClInclude Include="General.h" />
-    <ClInclude Include="Assets.h" />
+    <CopyFileToFolders Include="Ini\GP4PP.ini">
+      <Filter>Ini</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="Ini\VisorColours.ini">
+      <Filter>Ini</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>
