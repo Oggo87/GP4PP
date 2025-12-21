@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <array>
 #include <initializer_list>
 #include <windows.h>
 
@@ -9,7 +9,7 @@ namespace GP4PP
 	class BGRA
 	{
 	private:
-		std::vector<short> bytes = { 0, 0, 0, 0 };
+		std::array<short,4> bytes = { 0, 0, 0, 0 };
 		DWORD colour = 0x00000000;
 
 	public:
@@ -37,7 +37,13 @@ namespace GP4PP
 			setColour(b, g, r, a);
 		}
 
-		//Construct from byte array
+		//Construct from std::array
+		BGRA(std::array<short, 4> bytes)
+		{
+			setColour(bytes);
+		}
+
+		//Construct from std::vector
 		BGRA(std::vector<short> bytes)
 		{
 			setColour(bytes);
@@ -82,12 +88,12 @@ namespace GP4PP
 		//set from individual bytes
 		void setColour(short b, short g, short r, short a)
 		{
-			std::vector<short> byteArray = { b, g, r, a };
+			std::array<short, 4> byteArray = { b, g, r, a };
 			setColour(byteArray);
 		}
 
-		//set from byte array
-		void setColour(std::vector<short> newBytes)
+		//set from std::array
+		void setColour(std::array<short, 4> newBytes)
 		{
 			bytes = newBytes;
 			colour = 0;
@@ -102,14 +108,22 @@ namespace GP4PP
 			}
 		}
 
+		//set from std::vector
+		void setColour(std::vector<short> newBytes)
+		{
+			std::array<short, 4> byteArray = { 0, 0, 0, 0 };
+			std::copy_n(newBytes.begin(), std::min<size_t>(newBytes.size(), 4), byteArray.begin());
+			setColour(byteArray);
+		}
+
 		//set from DWORD colour
 		void setColour(DWORD newColour)
 		{
 			colour = newColour;
-			bytes.clear();
+			bytes.fill(0);
 			for (unsigned int i = 0; i < 4; i++)
 			{
-				bytes.push_back((newColour >> (i * 8)) & 0xFF);
+				bytes[i] = static_cast<short>((newColour >> (i * 8)) & 0xFF);
 			}
 		}
 
@@ -134,13 +148,14 @@ namespace GP4PP
 		// Assignment operator from initializer_list
 		BGRA& operator=(std::initializer_list<short> init)
 		{
-			std::vector<short> v(init);
+			std::array<short, 4> v = { 0, 0, 0, 0 };
+			std::copy_n(init.begin(), std::min<size_t>(init.size(), 4), v.begin());
 			setColour(v);
 			return *this;
 		}
 
 		// Assignment operator from byte array
-		BGRA& operator=(const std::vector<short>& newBytes)
+		BGRA& operator=(const std::array<short, 4>& newBytes)
 		{
 			setColour(newBytes);
 			return *this;
