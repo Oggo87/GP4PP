@@ -18,13 +18,16 @@ namespace RearLight
 	//Jump Back Addresses
 	DWORD rearLightFunctionJumpBackAddress = 0x005108f9;
 
+	//Function Addresses
+	DWORD isTrackWetFunc = 0x00510778;
+
 	//Data Variables
+	unsigned int trackWet = 0;
 	unsigned int rearLightOn = 0;
-	unsigned int accumulator = 0;
 
 	unsigned int carIndex = 0;
 
-	int periodMs = 500; //blink period in milliseconds
+	int periodMs = 250; //blink period in milliseconds
 
 	auto lastTime = steady_clock::now();
 
@@ -46,6 +49,13 @@ namespace RearLight
 			lightOn = false;
 		}
 	};
+
+	/*
+	F1 rear lights flash at different rates (Hz) to signal conditions:
+	4Hz (fast) in the wet for visibility;
+	2Hz (slow) for energy harvesting (ERS recovery) or Pit Limiter use; and 
+	2Hz for 10 secs after Safety Car/VSC;
+	*/
 
 	array<RearLightState, 22> rearLightStates;
 
@@ -78,9 +88,20 @@ namespace RearLight
 
 		__asm mov carIndex, EAX
 
-		calcRearLightState();
+		__asm call isTrackWetFunc
 
-		rearLightOn = rearLightStates[carIndex].lightOn;
+		__asm mov trackWet, EAX
+
+		if (trackWet)
+		{
+			calcRearLightState();
+
+			rearLightOn = rearLightStates[carIndex].lightOn;
+		}
+		else
+		{
+			rearLightOn = trackWet;
+		}
 
 		RegUtils::restoreVolatileRegisters();
 
