@@ -69,6 +69,9 @@
     <ClCompile Include="Patches\HelmetVisor.cpp">
       <Filter>Patches\Source</Filter>
     </ClCompile>
+    <ClCompile Include="Patches\RearLight.cpp">
+      <Filter>Patches\Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Patches\Assets.h">
@@ -93,6 +96,9 @@
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="Patches\HelmetVisor.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\RearLight.h">
       <Filter>Patches\Header</Filter>
     </ClInclude>
   </ItemGroup>

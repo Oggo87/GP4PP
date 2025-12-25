@@ -217,12 +217,12 @@ namespace CockpitVisor
 		//Set Shader Parameters
 		//Colour
 		colour = zGlassData[driverIndex].colour;
-		MemUtils::patchAddress((LPVOID)(zShaderParams), MemUtils::toBytes<DWORD>(colour), sizeof(DWORD));
+		MemUtils::patchAddress((LPVOID)(zShaderParams), MemUtils::toBytes<DWORD>(colour), sizeof(DWORD), false);
 
 		//MemUtils::patchAddress((LPVOID)(zShaderParams), (BYTE*)(&(zGlassData[driverIndex].colour)), 4);
 
 		//Multiplier
-		MemUtils::patchAddress((LPVOID)(zShaderParams + 4), MemUtils::toBytes<float>(zGlassData[driverIndex].transparencyMultiplier), sizeof(float));
+		MemUtils::patchAddress((LPVOID)(zShaderParams + 4), MemUtils::toBytes<float>(zGlassData[driverIndex].transparencyMultiplier), sizeof(float), false);
 
 		RegUtils::restoreVolatileRegisters();
 
