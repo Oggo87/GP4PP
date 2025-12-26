@@ -1,9 +1,7 @@
 #include "RearLight.h"
 #include "../Utils/Helpers.h"
 #include "../GP4MemLib/GP4MemLib.h"
-#include<chrono>
 #include<array>
-#include<random>
 
 using namespace GP4MemLib;
 using namespace GP4PP;
@@ -27,59 +25,26 @@ namespace RearLight
 
 	unsigned int carIndex = 0;
 
-	int periodMs = 250; //blink period in milliseconds
+	bool RearLight::wetWeatherBlinking = false;
+	int RearLight::wetWeatherPeriodMs = 250;
 
-	auto lastTime = steady_clock::now();
+	//static Random Number Generator for random time offsets
+	std::mt19937 Blinker::rng(static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count()));
 
-	struct RearLightState
+	array<RearLight, 22> rearLights;
+
+	int calcRearLightState()
 	{
-		// lastTime is set to now + random offset so different cars blink out of phase
-		steady_clock::time_point lastTime;
-		bool lightOn = false;
-
-		RearLightState()
+		if (trackWet)
 		{
-			auto now = steady_clock::now();
-
-			// static RNG so we don't reseed on each construction
-			static mt19937 rng(static_cast<unsigned>(steady_clock::now().time_since_epoch().count()));
-			uniform_int_distribution<int> dist(0, periodMs);
-
-			lastTime = now + milliseconds(dist(rng));
-			lightOn = false;
+			rearLights[carIndex].setState(WET);
 		}
-	};
-
-	/*
-	F1 rear lights flash at different rates (Hz) to signal conditions:
-	4Hz (fast) in the wet for visibility;
-	2Hz (slow) for energy harvesting (ERS recovery) or Pit Limiter use; and 
-	2Hz for 10 secs after Safety Car/VSC;
-	*/
-
-	array<RearLightState, 22> rearLightStates;
-
-	void calcRearLightState()
-	{
-
-		auto currentTime = steady_clock::now();
-
-		auto elapsed = duration_cast<milliseconds>(currentTime - rearLightStates[carIndex].lastTime).count();
-
-		if (elapsed >= periodMs)
+		else
 		{
-
-			if (rearLightStates[carIndex].lightOn)
-			{
-				rearLightStates[carIndex].lightOn = 0;
-			}
-			else
-			{
-				rearLightStates[carIndex].lightOn = 1;
-			}
-
-			rearLightStates[carIndex].lastTime += milliseconds(periodMs);
+			rearLights[carIndex].setState(OFF);
 		}
+
+		return rearLights[carIndex].update();
 	}
 
 	__declspec(naked) void rearLightFunction()
@@ -92,16 +57,7 @@ namespace RearLight
 
 		__asm mov trackWet, EAX
 
-		if (trackWet)
-		{
-			calcRearLightState();
-
-			rearLightOn = rearLightStates[carIndex].lightOn;
-		}
-		else
-		{
-			rearLightOn = trackWet;
-		}
+		rearLightOn = calcRearLightState();
 
 		RegUtils::restoreVolatileRegisters();
 
@@ -112,6 +68,25 @@ namespace RearLight
 
 	void LoadSettings(IniFile iniSettings)
 	{
+		//Wet weather rear light blinking
+		try
+		{
+			RearLight::wetWeatherBlinking = iniSettings["RearLight"]["WetWeatherBlinking"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Rear Light - Wet Weather Blinking : " + string(RearLight::wetWeatherBlinking ? "Enabled" : "Disabled"));
+
+		if (RearLight::wetWeatherBlinking)
+		{
+			try
+			{
+				RearLight::wetWeatherPeriodMs = iniSettings["RearLight"]["WetWeatherPeriod"].getAs<int>();
+			}
+			catch (exception ex) {}
+
+			OutputGP4PPDebugString("Rear Light - Wet Weather Period : " + to_string(RearLight::wetWeatherPeriodMs) + " ms");
+		}
 	}
 
 	void ApplyPatches()
