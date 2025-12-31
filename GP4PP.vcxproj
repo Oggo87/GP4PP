@@ -182,6 +182,9 @@
     <ClInclude Include="Patches\Pitcrew.h" />
     <ClInclude Include="Patches\RearLight.h" />
     <ClInclude Include="Utils\BGRA.h" />
+    <ClInclude Include="Utils\CarData.h" />
+    <ClInclude Include="Utils\CarDataFlags.h" />
+    <ClInclude Include="Utils\CarDynamicData.h" />
     <ClInclude Include="Utils\CGP4Glass.h" />
     <ClInclude Include="Utils\Helpers.h" />
   </ItemGroup>

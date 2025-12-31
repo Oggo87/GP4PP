@@ -101,6 +101,15 @@
     <ClInclude Include="Patches\RearLight.h">
       <Filter>Patches\Header</Filter>
     </ClInclude>
+    <ClInclude Include="Utils\CarDynamicData.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils\CarData.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils\CarDataFlags.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="Ini\GP4PP.ini">

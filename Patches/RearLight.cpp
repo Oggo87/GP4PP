@@ -1,5 +1,6 @@
 #include "RearLight.h"
 #include "../Utils/Helpers.h"
+#include "../Utils/CarDynamicData.h"
 #include "../GP4MemLib/GP4MemLib.h"
 #include<array>
 
@@ -10,6 +11,10 @@ using namespace chrono;
 
 namespace RearLight
 {
+	//General Settings
+	bool wetWeather = true;
+	bool brake = false;
+
 	//Target Addresses
 	DWORD rearLightFunctionAddress = 0x005108f4;
 
@@ -25,6 +30,10 @@ namespace RearLight
 
 	unsigned int carIndex = 0;
 
+	DWORD carDynDataAddress = 0;
+
+	CarDynamicData *carDynData;
+
 	bool RearLight::wetWeatherBlinking = false;
 	int RearLight::wetWeatherPeriodMs = 250;
 
@@ -35,7 +44,13 @@ namespace RearLight
 
 	int calcRearLightState()
 	{
-		if (trackWet)
+		carDynData = MemUtils::addressToPtr<CarDynamicData>(carDynDataAddress);
+
+		if (brake && carDynData->brake2 > 0x10)
+		{
+			rearLights[carIndex].setState(BRAKE);
+		}
+		else if (wetWeather && trackWet)
 		{
 			rearLights[carIndex].setState(WET);
 		}
@@ -53,6 +68,8 @@ namespace RearLight
 
 		__asm mov carIndex, EAX
 
+		__asm mov carDynDataAddress, ESI
+
 		__asm call isTrackWetFunc
 
 		__asm mov trackWet, EAX
@@ -68,25 +85,46 @@ namespace RearLight
 
 	void LoadSettings(IniFile iniSettings)
 	{
-		//Wet weather rear light blinking
+		//Wet weather rear light
 		try
 		{
-			RearLight::wetWeatherBlinking = iniSettings["RearLight"]["WetWeatherBlinking"].getAs<bool>();
+			wetWeather = iniSettings["RearLight"]["WetWeather"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("Rear Light - Wet Weather Blinking : " + string(RearLight::wetWeatherBlinking ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Rear Light - Wet Weather : " + string(wetWeather ? "Enabled" : "Disabled"));
 
-		if (RearLight::wetWeatherBlinking)
+		if (wetWeather)
 		{
+			//Wet weather rear light blinking
 			try
 			{
-				RearLight::wetWeatherPeriodMs = iniSettings["RearLight"]["WetWeatherPeriod"].getAs<int>();
+				RearLight::wetWeatherBlinking = iniSettings["RearLight"]["WetWeatherBlinking"].getAs<bool>();
 			}
 			catch (exception ex) {}
 
-			OutputGP4PPDebugString("Rear Light - Wet Weather Period : " + to_string(RearLight::wetWeatherPeriodMs) + " ms");
+			OutputGP4PPDebugString("Rear Light - Wet Weather Blinking : " + string(RearLight::wetWeatherBlinking ? "Enabled" : "Disabled"));
+
+			if (RearLight::wetWeatherBlinking)
+			{
+				try
+				{
+					RearLight::wetWeatherPeriodMs = iniSettings["RearLight"]["WetWeatherPeriod"].getAs<int>();
+				}
+				catch (exception ex) {}
+
+				OutputGP4PPDebugString("Rear Light - Wet Weather Period : " + to_string(RearLight::wetWeatherPeriodMs) + " ms");
+			}
 		}
+
+		//Brake rear light
+		try
+		{
+			brake = iniSettings["RearLight"]["Brake"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Rear Light - Brake : " + string(brake ? "Enabled" : "Disabled"));
 	}
 
 	void ApplyPatches()
