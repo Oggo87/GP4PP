@@ -45,12 +45,12 @@ namespace {
 		OutputGP4PPDebugString("Address of new Vertex Buffer: " + messageBuilder.str());
 
 		//Patch exe for new vertex buffer
-		MemUtils::patchAddress((LPVOID)0x004F929A, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F92F5, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F929A, MemUtils::toBytes<LPBYTE>(pitcrewVertexBuffer), sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92F5, MemUtils::toBytes<LPBYTE>(pitcrewVertexBuffer), sizeof(pitcrewVertexBuffer));
 		pitcrewVertexBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F92FE, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92FE, MemUtils::toBytes<LPBYTE>(pitcrewVertexBuffer), sizeof(pitcrewVertexBuffer));
 		pitcrewVertexBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F9307, pitcrewVertexBuffer, sizeof(pitcrewVertexBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F9307, MemUtils::toBytes<LPBYTE>(pitcrewVertexBuffer), sizeof(pitcrewVertexBuffer));
 
 		LPBYTE pitcrewNormalsBuffer = (LPBYTE)VirtualAlloc(NULL, 65536 * 4 * 3, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!pitcrewNormalsBuffer) {
@@ -66,14 +66,14 @@ namespace {
 		OutputGP4PPDebugString("Address of new Normals Buffer: " + messageBuilder.str());
 
 		//Patch exe for new normals buffer
-		MemUtils::patchAddress((LPVOID)0x004F92A1, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F8187, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F92D8, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92A1, MemUtils::toBytes<LPBYTE>(pitcrewNormalsBuffer), sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F8187, MemUtils::toBytes<LPBYTE>(pitcrewNormalsBuffer), sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92D8, MemUtils::toBytes<LPBYTE>(pitcrewNormalsBuffer), sizeof(pitcrewNormalsBuffer));
 		pitcrewNormalsBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F92E4, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
-		MemUtils::patchAddress((LPVOID)0x004F81AB, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92E4, MemUtils::toBytes<LPBYTE>(pitcrewNormalsBuffer), sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F81AB, MemUtils::toBytes<LPBYTE>(pitcrewNormalsBuffer), sizeof(pitcrewNormalsBuffer));
 		pitcrewNormalsBuffer += 4;
-		MemUtils::patchAddress((LPVOID)0x004F92ED, pitcrewNormalsBuffer, sizeof(pitcrewNormalsBuffer));
+		MemUtils::patchAddress((LPVOID)0x004F92ED, MemUtils::toBytes<LPBYTE>(pitcrewNormalsBuffer), sizeof(pitcrewNormalsBuffer));
 
 		//Patch exe for larger D3D allocated memory space
 		MemUtils::patchAddress((LPVOID)0x004F2CA6, MemUtils::toBytes<int>(d3dBufferSize), sizeof(int));
