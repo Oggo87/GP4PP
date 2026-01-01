@@ -172,7 +172,6 @@
     <ClCompile Include="Patches\General.cpp" />
     <ClCompile Include="Patches\HelmetVisor.cpp" />
     <ClCompile Include="Patches\Pitcrew.cpp" />
-    <ClCompile Include="Patches\RearLight.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Patches\Assets.h" />
@@ -180,11 +179,7 @@
     <ClInclude Include="Patches\General.h" />
     <ClInclude Include="Patches\HelmetVisor.h" />
     <ClInclude Include="Patches\Pitcrew.h" />
-    <ClInclude Include="Patches\RearLight.h" />
     <ClInclude Include="Utils\BGRA.h" />
-    <ClInclude Include="Utils\CarData.h" />
-    <ClInclude Include="Utils\CarDataFlags.h" />
-    <ClInclude Include="Utils\CarDynamicData.h" />
     <ClInclude Include="Utils\CGP4Glass.h" />
     <ClInclude Include="Utils\Helpers.h" />
   </ItemGroup>
