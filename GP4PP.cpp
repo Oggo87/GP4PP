@@ -46,7 +46,7 @@ DWORD WINAPI MainThread(LPVOID param)
 		Assets::LoadSettings(iniSettings);
 
 		// Load Rear Light Settings
-		//RearLight::LoadSettings(iniSettings);
+		RearLight::LoadSettings(iniSettings);
 
 	}
 	else

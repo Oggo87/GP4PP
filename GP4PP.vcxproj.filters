@@ -104,10 +104,7 @@
     <ClInclude Include="Utils\CarDynamicData.h">
       <Filter>Utils</Filter>
     </ClInclude>
-    <ClInclude Include="Utils\CarData.h">
-      <Filter>Utils</Filter>
-    </ClInclude>
-    <ClInclude Include="Utils\CarDataFlags.h">
+    <ClInclude Include="Utils\CarDynamicDataFlags.h">
       <Filter>Utils</Filter>
     </ClInclude>
   </ItemGroup>

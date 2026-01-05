@@ -12,8 +12,8 @@ using namespace chrono;
 namespace RearLight
 {
 	//General Settings
-	bool wetWeather = true;
-	bool brake = false;
+	bool wetWeatherLight = true;
+	bool brakeLight = false;
 
 	//Target Addresses
 	DWORD rearLightFunctionAddress = 0x005108f4;
@@ -46,11 +46,11 @@ namespace RearLight
 	{
 		carDynData = MemUtils::addressToPtr<CarDynamicData>(carDynDataAddress);
 
-		if (brake && carDynData->brake2 > 0x10)
+		if (brakeLight && carDynData->brake_0x24B > 0x10)
 		{
 			rearLights[carIndex].setState(BRAKE);
 		}
-		else if (wetWeather && trackWet)
+		else if (wetWeatherLight && trackWet)
 		{
 			rearLights[carIndex].setState(WET);
 		}
@@ -88,13 +88,13 @@ namespace RearLight
 		//Wet weather rear light
 		try
 		{
-			wetWeather = iniSettings["RearLight"]["WetWeather"].getAs<bool>();
+			wetWeatherLight = iniSettings["RearLight"]["WetWeather"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("Rear Light - Wet Weather : " + string(wetWeather ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Rear Light - Wet Weather : " + string(wetWeatherLight ? "Enabled" : "Disabled"));
 
-		if (wetWeather)
+		if (wetWeatherLight)
 		{
 			//Wet weather rear light blinking
 			try
@@ -120,11 +120,11 @@ namespace RearLight
 		//Brake rear light
 		try
 		{
-			brake = iniSettings["RearLight"]["Brake"].getAs<bool>();
+			brakeLight = iniSettings["RearLight"]["Brake"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("Rear Light - Brake : " + string(brake ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Rear Light - Brake : " + string(brakeLight ? "Enabled" : "Disabled"));
 	}
 
 	void ApplyPatches()
