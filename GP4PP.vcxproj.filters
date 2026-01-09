@@ -107,6 +107,9 @@
     <ClInclude Include="Utils\CarDynamicDataFlags.h">
       <Filter>Utils</Filter>
     </ClInclude>
+    <ClInclude Include="Utils\PitLimiter.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="Ini\GP4PP.ini">

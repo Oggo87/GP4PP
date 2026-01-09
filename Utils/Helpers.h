@@ -49,4 +49,10 @@ namespace GP4PP
 
 		return result;
 	}
+
+	inline bool isTweakerEnabled() {
+		HMODULE dllTweakHandle = GetModuleHandleA("GP4Tweak.dll");
+		return (dllTweakHandle != NULL);
+	}
+
 };

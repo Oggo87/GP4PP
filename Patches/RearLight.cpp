@@ -1,6 +1,7 @@
 #include "RearLight.h"
 #include "../Utils/Helpers.h"
 #include "../Utils/CarDynamicData.h"
+#include "../Utils/PitLimiter.h"
 #include "../GP4MemLib/GP4MemLib.h"
 #include<array>
 
@@ -14,6 +15,8 @@ namespace RearLight
 	//General Settings
 	bool wetWeatherLight = true;
 	bool brakeLight = false;
+	short brakeThreshold = 5; //%
+	bool pitLimiterLight = true;
 
 	//Target Addresses
 	DWORD rearLightFunctionAddress = 0x005108f4;
@@ -23,6 +26,9 @@ namespace RearLight
 
 	//Function Addresses
 	DWORD isTrackWetFunc = 0x00510778;
+
+	//Parameters
+	unsigned short maxBrakeValue = 0x4000;
 
 	//Data Variables
 	unsigned int trackWet = 0;
@@ -37,6 +43,12 @@ namespace RearLight
 	bool RearLight::wetWeatherBlinking = false;
 	int RearLight::wetWeatherPeriodMs = 250;
 
+	bool RearLight::pitLimiterBlinking = true;
+	int RearLight::pitLimiterPeriodMs = 500;
+
+
+	bool pitLimiterOn = false;
+
 	//static Random Number Generator for random time offsets
 	std::mt19937 Blinker::rng(static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count()));
 
@@ -46,10 +58,18 @@ namespace RearLight
 	{
 		carDynData = MemUtils::addressToPtr<CarDynamicData>(carDynDataAddress);
 
-		if (brakeLight && carDynData->brake_0x24B > 0x10)
+		if (brakeLight && (carDynData->brake > maxBrakeValue))
 		{
 			rearLights[carIndex].setState(BRAKE);
 		}
+		else if(pitLimiterLight && PitLimiter::updateSatus(carDynData))
+		{
+			rearLights[carIndex].setState(PIT_LIMITER);
+		}
+		//else if (carDynData->flags_0x7B.energyHarvestingERS) // Charging
+		//{
+		//	rearLights[carIndex].setState(CHARGE);
+		//}
 		else if (wetWeatherLight && trackWet)
 		{
 			rearLights[carIndex].setState(WET);
@@ -85,6 +105,9 @@ namespace RearLight
 
 	void LoadSettings(IniFile iniSettings)
 	{
+		//Utility string builder
+		std::ostringstream messageBuilder;
+
 		//Wet weather rear light
 		try
 		{
@@ -125,6 +148,63 @@ namespace RearLight
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Rear Light - Brake : " + string(brakeLight ? "Enabled" : "Disabled"));
+
+		if (brakeLight)
+		{
+			try
+			{
+				brakeThreshold = iniSettings["RearLight"]["BrakeThreshold"].getAs<short>();
+			}
+			catch (exception ex) {}
+
+			messageBuilder.str(string());
+
+			messageBuilder << "Rear Light - Brake Threshold : " << brakeThreshold << " %";
+
+			if (brakeThreshold > 100)
+			{
+				messageBuilder << " (Clamped to 100 %)";
+				brakeThreshold = 100;
+			}
+			else if (brakeThreshold < 0)
+			{
+				messageBuilder << " (Clamped to 0 %)";
+				brakeThreshold = 0;
+			}
+
+			OutputGP4PPDebugString(messageBuilder.str());
+		}
+
+		try
+		{
+			pitLimiterLight = iniSettings["RearLight"]["PitLimiter"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Rear Light - Pit Limiter : " + string(pitLimiterLight ? "Enabled" : "Disabled"));
+
+		if (pitLimiterLight)
+		{
+			//Pit Limiter rear light blinking
+			try
+			{
+				RearLight::pitLimiterBlinking = iniSettings["RearLight"]["PitLimiterBlinking"].getAs<bool>();
+			}
+			catch (exception ex) {}
+
+			OutputGP4PPDebugString("Rear Light - Pit Limiter Blinking : " + string(RearLight::pitLimiterBlinking ? "Enabled" : "Disabled"));
+
+			if (RearLight::pitLimiterBlinking)
+			{
+				try
+				{
+					RearLight::pitLimiterPeriodMs = iniSettings["RearLight"]["PitLimiterPeriod"].getAs<int>();
+				}
+				catch (exception ex) {}
+
+				OutputGP4PPDebugString("Rear Light - Pit Limiter Period : " + to_string(RearLight::pitLimiterPeriodMs) + " ms");
+			}
+		}
 	}
 
 	void ApplyPatches()

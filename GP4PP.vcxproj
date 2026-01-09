@@ -186,6 +186,7 @@
     <ClInclude Include="Utils\CarDynamicDataFlags.h" />
     <ClInclude Include="Utils\CGP4Glass.h" />
     <ClInclude Include="Utils\Helpers.h" />
+    <ClInclude Include="Utils\PitLimiter.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

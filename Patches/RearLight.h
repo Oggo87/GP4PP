@@ -78,12 +78,12 @@ namespace RearLight
 			return false;
 		}
 
-		bool isEnabled()
+		bool isEnabled() const
 		{
 			return isBlinking;
 		}
 
-		bool getLightState()
+		bool getLightState() const
 		{
 			return lightOn;
 		}
@@ -101,6 +101,8 @@ namespace RearLight
 
 		static bool wetWeatherBlinking;
 		static int wetWeatherPeriodMs;
+		static bool pitLimiterBlinking;
+		static int pitLimiterPeriodMs;
 
 		RearLight()
 		{
@@ -143,7 +145,15 @@ namespace RearLight
 					lightOn = true;
 					break;
 				case PIT_LIMITER:
-					blinker.enable(500); // 2Hz
+					if (pitLimiterBlinking)
+					{
+						blinker.enable(pitLimiterPeriodMs);
+					}
+					else
+					{
+						blinker.disable();
+						lightOn = true;
+					}
 					break;
 				case CHARGE:
 					blinker.enable(500); // 2Hz

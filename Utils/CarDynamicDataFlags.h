@@ -25,7 +25,10 @@ struct CarDigitalControlFlags {
 
 // offset 0x071 - CarDynamicData::flags_0x071
 struct CarFlags71 {
-    uint8_t reserved0 : 7;
+    uint8_t reserved0 : 5;
+	uint8_t limiterOn : 1; // bit 5 (0x20) - pit limiter on, only used by Tweaker?
+	uint8_t reserved6 : 1;
+    //uint8_t pitInCall : 1; // bit 7 (0x80) - request to pit enabled
     uint8_t pitLight : 1; // bit 7 (0x80) - pit light enabled
 };
 
@@ -83,20 +86,20 @@ struct CarDamageFlags2 {
 
 // offset 0x82 - CarDynamicData::flagsLeds
 struct CarLedsFlags {
-    uint8_t displayNow : 1; // bit 0 (1)
-    uint8_t driverName : 1; // bit 2 (4)
-    uint8_t split : 2; // bits 3–4 (8/0x10)
-    uint8_t warning : 1; // bit 5 (0x20)
-    uint8_t failure : 1; // bit 6 (0x40)
+	uint8_t displayNow : 1; // bit 0 (1) - display now
+	uint8_t driverName : 1; // bit 2 (4) - show driver name
+	uint8_t split : 2; // bits 3–4 (8/0x10) - split info
+	uint8_t warning : 1; // bit 5 (0x20) - show warning
+	uint8_t failure : 1; // bit 6 (0x40) - show failure
 	uint8_t logging : 1; // bit 7 (0x80) - start logging
 };
 
 // offset 0x83 - CarDynamicData::flagsRaceFlags
 struct CarRaceFlagsFlags {
 	uint8_t reserved0 : 2;
-    uint8_t blackFlag : 1; // bit 2 (4)
+	uint8_t blackFlag : 1; // bit 2 (4) - black flag
 	uint8_t reserved3 : 1;
-    uint8_t yellowFlag : 1; // bit 4 (0x10)
+	uint8_t yellowFlag : 1; // bit 4 (0x10) - yellow flag
     uint8_t reserved6 : 3;
 };
 
@@ -166,6 +169,15 @@ struct CarPitFlags {
     uint8_t movedInMenu : 1; // bit 5 (0x20)
 	uint8_t reserved6 : 1;
     uint8_t notInPitBox : 1; // bit 7 (0x80)
+};
+
+// offset 0x9C - CarDynamicData::pitLaneState
+enum CarPitLaneState : uint8_t {
+    PITSTATE_ON_TRACK = 0, // on track
+    PITSTATE_IN_PITLANE = 1, // in pitlane
+    PITSTATE_ENTERING_PITS = 2, // leaving pits
+    PITSTATE_LEAVING_PITS = 3, // entering pits
+    PITSTATE_UNKNOWN = 4  // unknown / other / menu
 };
 
 // offset 0xCE - CarDynamicData::flags_0x0CE
@@ -270,7 +282,8 @@ struct CarFlags203 {
 
 // offset 0x230 - CarDynamicData::flags_0x230
 struct CarFlags230 {
-    uint8_t reserved0 : 7;
+	uint8_t wetTrack : 1;  // bit 0 (0x01) - might be wet track - unclear
+    uint8_t reserved1 : 6;
     uint8_t carOnJacks : 1; // bit 7 (0x80) - car on jacks
 };
 

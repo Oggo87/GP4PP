@@ -72,7 +72,7 @@ struct CarDynamicData
     /* 0x079 */ uint8_t  field_0x079;
     /* 0x07A */ CarFlags7A  flags_0x7A;
     /* 0x07B */ CarEngineFlags  flags_0x7B;
-    /* 0x07C */ uint8_t  id;
+    /* 0x07C */ uint8_t  id; // >= 0x80:player
     /* 0x07D */ uint8_t  trackOrderIndex;
     /* 0x07E */ uint8_t  field_0x07E;
     /* 0x07F */ uint8_t  tyreCompoundIndex;
@@ -101,7 +101,8 @@ struct CarDynamicData
     /* 0x096 */ uint16_t segDist;
 
 	/* 0x098 */ int32_t  speed; // 0x9a according to Prblanco - 64 = 1 ft/s
-    /* 0x09C */ uint16_t flags_0x9C;
+    /* 0x09C */ CarPitLaneState pitLaneState; // used for pit limiter
+	/* 0x09D */ uint8_t  field_0x09D;
     /* 0x09E */ uint8_t  failureLapNr; // lap at which car failure will happen
     /* 0x09F */ uint8_t  failureSeg; // segment / 8 at which car failure will happen
 
@@ -164,7 +165,7 @@ struct CarDynamicData
     /* 0x104 */ uint32_t setupDiff_0x104;
     /* 0x108 */ uint16_t field_0x108;
     /* 0x10A */ uint16_t field_0x10A;
-    /* 0x10C */ uint16_t field_0x10C;
+	/* 0x10C */ uint16_t field_0x10C; // copied from 0x9C - unclear
     /* 0x10E */ uint16_t grip;
 
     /* 0x110 */ uint32_t pCar_0x110;
@@ -307,14 +308,14 @@ struct CarDynamicData
     /* 0x214 */ WheelsB  wheelsB_0x214;
     /* 0x218 */ WheelsB  wheelsB_0x218;
 
-	/* 0x21C */ uint16_t field_0x21C; // bit 5 (0x20) - might be AI related according to Prblanco, bit 8 (0x100) might be wet track - unclear
+	/* 0x21C */ uint16_t field_0x21C; // bit 5 (0x20) - might be AI related according to Prblanco - unclear
     /* 0x21E */ uint16_t field_0x21E;
     /* 0x220 */ uint32_t timer220;
     /* 0x224 */ uint16_t fuelLaps_0x224;
     /* 0x226 */ uint8_t  tyreSetSelLapsDone;
     /* 0x227 */ uint8_t  rearWing;
     /* 0x228 */ uint32_t field_0x228;
-    /* 0x22C */ uint32_t field_0x22C;
+	/* 0x22C */ uint32_t field_0x22C;
 
     /* 0x230 */ CarFlags230  flags_0x230;
     /* 0x231 */ CarFlags231  flags_0x231;
@@ -333,8 +334,7 @@ struct CarDynamicData
 
     /* 0x248 */ uint8_t  field_0x248;
     /* 0x249 */ uint8_t  field_0x249;
-	/* 0x24A */ uint8_t  brake_0x24A; // unclear - SDI indicate this offset as brake
-	/* 0x24B */ uint8_t  brake_0x24B; // unclear - this seems to be the brake value
+	/* 0x24A */ uint16_t  brake; // 16384 = 100%
     /* 0x24C */ uint16_t field_0x24C;
     /* 0x24E */ uint16_t field_0x24E;
     /* 0x250 */ uint32_t timer250;
