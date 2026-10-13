@@ -13,6 +13,7 @@ It also includes options to fully control cockpit and helmet visor colours and t
 Other features include:
 * Fixing the reversed tyre tread bug when using 3D rims
 * Disabling the built-in check for an optical drive
+* Per-team steering wheels, both the external texture and the in-cockpit mesh
 
 ## Getting Started
 

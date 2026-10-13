@@ -61,7 +61,7 @@
     <None Include="docs\D3D-Settings.md">
       <Filter>Docs</Filter>
     </None>
-    <None Include="docs\SteeringWheels-Settings.md">
+    <None Include="docs\Steering-Wheels-Settings.md">
       <Filter>Docs</Filter>
     </None>
   </ItemGroup>

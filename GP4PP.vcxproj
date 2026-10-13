@@ -156,7 +156,7 @@
     <None Include="docs\Getting-Started.md" />
     <None Include="docs\Pitcrew-Settings.md" />
     <None Include="docs\Rear-Light-Settings.md" />
-    <None Include="docs\SteeringWheels-Settings.md" />
+    <None Include="docs\Steering-Wheels-Settings.md" />
     <None Include="docs\Tweaker-Settings.md" />
     <None Include="docs\Usage.md" />
     <None Include="docs\Visor-Settings.md" />
