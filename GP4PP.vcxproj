@@ -156,6 +156,7 @@
     <None Include="docs\Getting-Started.md" />
     <None Include="docs\Pitcrew-Settings.md" />
     <None Include="docs\Rear-Light-Settings.md" />
+    <None Include="docs\SteeringWheels-Settings.md" />
     <None Include="docs\Tweaker-Settings.md" />
     <None Include="docs\Usage.md" />
     <None Include="docs\Visor-Settings.md" />
@@ -178,6 +179,7 @@
     <ClCompile Include="Patches\HelmetVisor.cpp" />
     <ClCompile Include="Patches\Pitcrew.cpp" />
     <ClCompile Include="Patches\RearLight.cpp" />
+    <ClCompile Include="Patches\SteeringWheels.cpp" />
     <ClCompile Include="Utils\Tweaker.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -188,6 +190,7 @@
     <ClInclude Include="Patches\HelmetVisor.h" />
     <ClInclude Include="Patches\Pitcrew.h" />
     <ClInclude Include="Patches\RearLight.h" />
+    <ClInclude Include="Patches\SteeringWheels.h" />
     <ClInclude Include="Utils\BGRA.h" />
     <ClInclude Include="Utils\CarDynamicData.h" />
     <ClInclude Include="Utils\CarDynamicDataFlags.h" />
