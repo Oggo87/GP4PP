@@ -4,47 +4,66 @@
 #include "../IniLib/IniLib.h"
 #include <algorithm>
 #include <functional>
+#include <vector>
 
 using namespace std;
 using namespace GP4MemLib;
 using namespace IniLib;
 using namespace GP4PP;
 
-// Per-team steering wheels, for both the external wheels drawn on every car and the
-// in-cockpit steering wheel mesh.
+// Per-team or per-car steering wheels, for both the external wheels drawn on every car and the
+// in-cockpit steering wheel mesh. Everything runs per car: the asset name decides whether
+// teammates share a steering wheel or not.
 //
 // Concept and reverse engineering from the ZaZ GP4 Tools proof of concept (Ronald Plukker).
 //
 // External wheels: GP4 draws all external steering wheels in one batch with the single
 // "stwheel.tga" texture. A car whose CGP4Car + 0xd0 holds a texture index instead of -1 is
-// drawn separately, with that texture bound to stage 1. Per-team textures are loaded right
+// drawn separately, with that texture bound to stage 1. Per-car textures are loaded right
 // after GP4 loads the vanilla one, CGP4Car + 0xd0 is set for the duration of the external
 // steering wheel renderer only, and just before each separate draw a texture that is ours is
 // moved from stage 1 to stage 0, where the visible steering wheel texture lives.
 //
-// Cockpit wheel: the cockpit draws the mesh at CGP4Cockpit + 0xd8c. Per-team meshes are loaded
-// right after the vanilla cockpit meshes, and before each cockpit update the mesh of the viewed
-// team is selected, together with the 294 cockpit object mappings (displays, lights, buttons)
-// that point into it. Everything is restored and freed before the cockpit is destroyed.
+// Cockpit wheel: the cockpit draws the mesh at CGP4Cockpit + 0xd8c. Per-car meshes are loaded
+// right after the vanilla cockpit meshes, one per distinct file, and before each cockpit update
+// the mesh of the viewed car is selected, together with the 294 cockpit object mappings
+// (displays, lights, buttons) that point into it. Everything is restored and freed before the
+// cockpit is destroyed.
+//
+// The cockpit is loaded before the cars are created, so the team and car of each car slot are
+// calculated the same way D3D_LoadCars assigns them, rather than read from the cars.
 
 namespace SteeringWheels
 {
+	// Settings of one steering wheel asset, read from its own ini section
+	struct WheelSettings
+	{
+		string section;
+		string name;
+		string perTeamFileName;
+		string perDriverFileName;
+		bool perTeam;
+		bool perDriver;
+		bool autoName;
+		string fileName;
+		bool enabled;
+	};
+
 	// Settings variables
-	bool externalWheels = false;
-	bool cockpitWheels = false;
-	bool autoName = true;
-
-	string defaultExternalFileName = "stwheel_{teamname}.tga";
-	string defaultCockpitFileName = "cockpits\\{teamname}\\cockpit_wheel.gp4";
-
-	string externalFileName = defaultExternalFileName;
-	string cockpitFileName = defaultCockpitFileName;
+	WheelSettings externalSettings = { "ExternalSteeringWheels", "External Steering Wheels", "stwheel_{teamname}.tga", "stwheel_{teamname}_car{car}.tga", false, false, true, "", false };
+	WheelSettings cockpitSettings = { "CockpitSteeringWheels", "Cockpit Steering Wheels", "cockpits\\{teamname}\\cockpit_wheel.gp4", "cockpits\\{teamname}_car{car}\\cockpit_wheel.gp4", false, false, true, "", false };
 
 	// Constants
-	const int NUM_TEAMS = 11;
-	const int NUM_CARS = 22;
 	const int NUM_COCKPIT_OBJECTS = 0x126;
 	const int VANILLA = -1;
+
+	// Car and team counts, read from GP4's code by readCarCounts()
+	int numCars = 0;
+	int numTeams = 0;
+
+	// Compare instruction closing the car creation loop of D3D_LoadCars: cmp ebx, <number of cars>
+	DWORD carLoopCompare = 0x0048d80f;
+	BYTE carLoopCompareBytes[] = { 0x83, 0xfb };
 
 	// Target Addresses (call instructions whose target gets replaced)
 	DWORD initCarSteeringWheelsCall = 0x0048d81e;
@@ -65,6 +84,10 @@ namespace SteeringWheels
 	// Vars and Data Addresses
 	DWORD arrCars = 0x00a51fd8;
 	DWORD arrTeamNames = 0x00643ba8;
+	DWORD quickLapsMode = 0x007c2e75;			// byte, non-zero in quick laps
+	DWORD quickLapsCarTeams = 0x007c2b24;		// byte per car slot, team chosen in quick laps
+	DWORD currentView = 0x00645950;				// 1-based
+	DWORD viewCameraCar = 0x00a5110c;			// car index per view, indexed by currentView - 1
 	DWORD carsFolder = 0x00644ee4;				// "CARS\"
 	DWORD stWheelTextureBasePath = 0x00644ef8;	// ".\cars\"
 	DWORD stWheelTextureIndex = 0x00644bbc;
@@ -137,6 +160,7 @@ namespace SteeringWheels
 
 	// Structure offsets
 	const DWORD CAR_TEAM_INDEX = 0x20;
+	const DWORD CAR_TEAM_CAR = 0x24;			// 0 or 1, first or second car of the team
 	const DWORD CAR_WHEEL_TEXTURE = 0xd0;
 
 	const DWORD DEVICE_MANAGER = 0x04;
@@ -182,31 +206,41 @@ namespace SteeringWheels
 		int indices[NUM_COCKPIT_OBJECTS];
 	};
 
-	struct TeamCockpitWheel
+	// One cockpit steering wheel file, shared by every car whose asset name resolves to it
+	struct CockpitWheelMesh
 	{
-		bool loaded;
-		bool owner;		// false when the mesh is shared with an earlier team using the same file
+		bool loaded;	// false when the file was not found or failed to load
 		BYTE* mesh;
 		DWORD meshIndex;
 		string fileName;
 		CockpitMapping mapping;
 	};
 
+	// Team and car of a car slot
+	struct CarSlot
+	{
+		int team;
+		int car;		// 0 or 1
+	};
+
 	// External wheels storage variables
 	bool externalPatched = false;
-	int teamTextureIndex[NUM_TEAMS];
+	vector<int> carTextureIndex;
 	bool insideWheelRender = false;
 	bool firstDrawLogged = false;
-	bool promotionLogged[NUM_TEAMS];
+	vector<bool> promotionLogged;
+	vector<BYTE*> changedCars;
+	vector<int> oldTextures;
 
 	// Cockpit wheels storage variables
 	bool cockpitPatched = false;
 	BYTE* cockpitObject = NULL;
 	BYTE* vanillaWheelMesh = NULL;
 	CockpitMapping vanillaMapping;
-	TeamCockpitWheel teamCockpitWheels[NUM_TEAMS];
-	int selectedTeam = VANILLA;
-	bool selectionLogged[NUM_TEAMS];
+	vector<CockpitWheelMesh> cockpitWheelMeshes;
+	vector<int> carCockpitWheel;		// index into cockpitWheelMeshes per car, or VANILLA
+	int selectedWheel = VANILLA;
+	vector<bool> selectionLogged;
 
 	template <typename T>
 	T& field(BYTE* base, DWORD offset)
@@ -214,16 +248,57 @@ namespace SteeringWheels
 		return *reinterpret_cast<T*>(base + offset);
 	}
 
+	BYTE* carAt(int carIndex)
+	{
+		return MemUtils::addressToValue<BYTE*>(arrCars + carIndex * sizeof(DWORD));
+	}
+
 	string teamName(int team)
 	{
 		return string(MemUtils::addressToPtr<char>(arrTeamNames + team * 0x20));
 	}
 
-	string teamFileName(const string& pattern, int team)
+	CarSlot carSlot(int carIndex)
 	{
+		// Same assignment as D3D_LoadCars
+		int slot = carIndex;
+
+		if (MemUtils::addressToValue<BYTE>(quickLapsMode) != 0)
+		{
+			slot = (carIndex & 1) + MemUtils::addressToValue<BYTE>(quickLapsCarTeams + carIndex) * 2;
+		}
+
+		CarSlot carSlot = { slot / 2, slot & 1 };
+
+		return carSlot;
+	}
+
+	bool validTeam(const CarSlot& slot)
+	{
+		return slot.team >= 0 && slot.team < numTeams;
+	}
+
+	string carName(int carIndex)
+	{
+		CarSlot slot = carSlot(carIndex);
+
+		if (!validTeam(slot))
+		{
+			return "car index " + to_string(carIndex + 1);
+		}
+
+		return teamName(slot.team) + " car " + to_string(slot.car + 1);
+	}
+
+	string carFileName(const string& pattern, int carIndex)
+	{
+		CarSlot slot = carSlot(carIndex);
+
 		map<string, string> variables;
-		variables["teamname"] = teamName(team);
-		variables["team"] = to_string(team + 1);
+		variables["teamname"] = teamName(slot.team);
+		variables["team"] = to_string(slot.team + 1);
+		variables["car"] = to_string(slot.car + 1);
+		variables["driverindex"] = to_string(carIndex + 1);
 
 		return replaceVariables(pattern, variables);
 	}
@@ -269,6 +344,40 @@ namespace SteeringWheels
 		return false;
 	}
 
+	bool readCarCounts()
+	{
+		BYTE* compare = MemUtils::addressToPtr<BYTE>(carLoopCompare);
+
+		if (memcmp(compare, carLoopCompareBytes, sizeof(carLoopCompareBytes)) != 0)
+		{
+			OutputGP4PPDebugString("Steering Wheels: unexpected bytes at " + MemUtils::dwordToString(carLoopCompare) + " (D3D_LoadCars car loop), patch not applied");
+			return false;
+		}
+
+		// The operand is a sign-extended byte
+		int count = static_cast<signed char>(compare[sizeof(carLoopCompareBytes)]);
+
+		if (count <= 0 || count % 2 != 0)
+		{
+			OutputGP4PPDebugString("Steering Wheels: unexpected car count " + to_string(count) + ", patch not applied");
+			return false;
+		}
+
+		numCars = count;
+		numTeams = numCars / 2;
+
+		carTextureIndex.assign(numCars, -1);
+		promotionLogged.assign(numCars, false);
+		changedCars.resize(numCars);
+		oldTextures.resize(numCars);
+		carCockpitWheel.assign(numCars, VANILLA);
+		selectionLogged.assign(numCars, false);
+
+		OutputGP4PPDebugString("Steering Wheels: " + to_string(numCars) + " cars, " + to_string(numTeams) + " teams");
+
+		return true;
+	}
+
 	//
 	// External steering wheels
 	//
@@ -290,13 +399,29 @@ namespace SteeringWheels
 		return field<DWORD>(textures, textureIndex * TEXTURE_SIZE + TEXTURE_D3D_TEXTURE);
 	}
 
+	void checkCarSlot(int carIndex, const CarSlot& slot)
+	{
+		// The cars exist by now: confirm they match the calculated team and car
+		BYTE* car = carAt(carIndex);
+
+		if (car == NULL)
+		{
+			return;
+		}
+
+		int carTeam = field<int>(car, CAR_TEAM_INDEX);
+		int carInTeam = field<int>(car, CAR_TEAM_CAR);
+
+		if (carTeam != slot.team || carInTeam != slot.car)
+		{
+			OutputGP4PPDebugString("Steering Wheels: car index " + to_string(carIndex + 1) + " calculated as team " + to_string(slot.team + 1) + " car " + to_string(slot.car + 1) + ", but GP4 has team " + to_string(carTeam + 1) + " car " + to_string(carInTeam + 1));
+		}
+	}
+
 	void loadExternalTextures(BYTE* device)
 	{
-		for (int team = 0; team < NUM_TEAMS; team++)
-		{
-			teamTextureIndex[team] = -1;
-			promotionLogged[team] = false;
-		}
+		carTextureIndex.assign(numCars, -1);
+		promotionLogged.assign(numCars, false);
 
 		firstDrawLogged = false;
 
@@ -323,29 +448,40 @@ namespace SteeringWheels
 		BackupTextureBasePathFunc(manager);
 		SetTextureBasePathFunc(manager, MemUtils::addressToPtr<char>(stWheelTextureBasePath));
 
-		for (int team = 0; team < NUM_TEAMS; team++)
+		for (int carIndex = 0; carIndex < numCars; carIndex++)
 		{
-			string fileName = teamFileName(externalFileName, team);
+			CarSlot slot = carSlot(carIndex);
+
+			if (!validTeam(slot))
+			{
+				OutputGP4PPDebugString("Steering Wheels: car index " + to_string(carIndex + 1) + " has no valid team, using default external texture");
+				continue;
+			}
+
+			checkCarSlot(carIndex, slot);
+
+			string fileName = carFileName(externalSettings.fileName, carIndex);
 			string assetName = carsFolderPath(texFileName(fileName));
 
 			if (!assetFileExists(assetName))
 			{
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " external texture not found, using default [" + assetName + "]");
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " external texture not found, using default [" + assetName + "]");
 				continue;
 			}
 
+			// GP4 loads each texture once, so cars using the same file get the same index
 			int textureIndex = GetTextureIndexFunc(manager, fileName.c_str(), 2, 0x7fffffff, 0x7fffffff, 0, 0, 0);
 
 			// GetTextureIndex reserves a slot even when loading fails, so check the actual D3D texture
 			if (textureIndex < 0 || textureIndex == defaultTextureIndex || textureD3DPointer(manager, textureIndex) == 0)
 			{
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " external texture failed to load, using default [" + assetName + "]");
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " external texture failed to load, using default [" + assetName + "]");
 				continue;
 			}
 
-			teamTextureIndex[team] = textureIndex;
+			carTextureIndex[carIndex] = textureIndex;
 
-			OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " external texture loaded at index " + to_string(textureIndex) + " [" + assetName + "]");
+			OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " external texture loaded at index " + to_string(textureIndex) + " [" + assetName + "]");
 		}
 
 		RestoreTextureBasePathFunc(manager);
@@ -363,23 +499,14 @@ namespace SteeringWheels
 
 	void __cdecl renderCarSteeringWheelsFunc(BYTE* device, DWORD param)
 	{
-		BYTE* changedCars[NUM_CARS];
-		int oldTextures[NUM_CARS];
 		int numChanged = 0;
 
-		// Temporarily give the cars of teams with their own wheel a separate draw with their texture
-		for (int carIndex = 0; carIndex < NUM_CARS; carIndex++)
+		// Temporarily give the cars with their own wheel a separate draw with their texture
+		for (int carIndex = 0; carIndex < numCars; carIndex++)
 		{
-			BYTE* car = MemUtils::addressToValue<BYTE*>(arrCars + carIndex * sizeof(DWORD));
+			BYTE* car = carAt(carIndex);
 
-			if (car == NULL)
-			{
-				continue;
-			}
-
-			int team = field<int>(car, CAR_TEAM_INDEX);
-
-			if (team < 0 || team >= NUM_TEAMS || teamTextureIndex[team] < 0)
+			if (car == NULL || carTextureIndex[carIndex] < 0)
 			{
 				continue;
 			}
@@ -388,14 +515,14 @@ namespace SteeringWheels
 			oldTextures[numChanged] = field<int>(car, CAR_WHEEL_TEXTURE);
 			numChanged++;
 
-			field<int>(car, CAR_WHEEL_TEXTURE) = teamTextureIndex[team];
+			field<int>(car, CAR_WHEEL_TEXTURE) = carTextureIndex[carIndex];
 		}
 
 		if (!firstDrawLogged)
 		{
 			firstDrawLogged = true;
 
-			OutputGP4PPDebugString("Steering Wheels: first external draw with " + to_string(numChanged) + " car(s) using a team steering wheel");
+			OutputGP4PPDebugString("Steering Wheels: first external draw with " + to_string(numChanged) + " car(s) using their own steering wheel");
 		}
 
 		insideWheelRender = true;
@@ -419,10 +546,10 @@ namespace SteeringWheels
 			DWORD stageOneTexture = field<DWORD>(device, DEVICE_STAGE1_TEXTURE);
 			BYTE* manager = field<BYTE*>(device, DEVICE_MANAGER);
 
-			for (int team = 0; stageOneTexture != 0 && team < NUM_TEAMS; team++)
+			for (int carIndex = 0; stageOneTexture != 0 && carIndex < numCars; carIndex++)
 			{
 				// Only promote textures that are ours, leave any other GP4 overlay untouched
-				if (teamTextureIndex[team] >= 0 && textureD3DPointer(manager, teamTextureIndex[team]) == stageOneTexture)
+				if (carTextureIndex[carIndex] >= 0 && textureD3DPointer(manager, carTextureIndex[carIndex]) == stageOneTexture)
 				{
 					field<DWORD>(device, DEVICE_STAGE0_TEXTURE) = stageOneTexture;
 					field<DWORD>(device, DEVICE_STAGE1_TEXTURE) = 0;
@@ -430,11 +557,12 @@ namespace SteeringWheels
 					field<BYTE>(device, DEVICE_STAGE1_DIRTY) = 1;
 					field<BYTE>(device, DEVICE_TEXTURES_DIRTY) = 1;
 
-					if (!promotionLogged[team])
+					// Cars sharing a texture match the first of them, so this is logged once per texture
+					if (!promotionLogged[carIndex])
 					{
-						promotionLogged[team] = true;
+						promotionLogged[carIndex] = true;
 
-						OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " external texture bound to stage 0");
+						OutputGP4PPDebugString("Steering Wheels: external texture at index " + to_string(carTextureIndex[carIndex]) + " bound to stage 0");
 					}
 
 					break;
@@ -587,9 +715,8 @@ namespace SteeringWheels
 		}
 	}
 
-	bool loadCockpitWheelMesh(BYTE* cockpit, BYTE* manager, BYTE shader, int team, const string& assetName)
+	bool loadCockpitWheelMesh(BYTE* cockpit, BYTE* manager, BYTE shader, CockpitWheelMesh& wheel)
 	{
-		TeamCockpitWheel& wheel = teamCockpitWheels[team];
 		BYTE* dashMesh = field<BYTE*>(cockpit, COCKPIT_DASH_MESH);
 
 		// Same mesh settings CGP4Cockpit::LoadMesh uses for cockpit_wheel.gp4
@@ -613,7 +740,7 @@ namespace SteeringWheels
 			field<DWORD>(mesh, 0x228) = 0;
 
 			// Textures referenced by the mesh are resolved relative to the mesh's own folder
-			fileLoaded = LoadGP4MeshFileFunc(mesh, assetName.c_str(), 0);
+			fileLoaded = LoadGP4MeshFileFunc(mesh, wheel.fileName.c_str(), 0);
 		}
 
 		field<BYTE>(manager, MANAGER_NUM_MIPMAPS) = numMipMaps;
@@ -650,7 +777,6 @@ namespace SteeringWheels
 		hideAllObjects(mesh);
 
 		wheel.loaded = true;
-		wheel.owner = true;
 		wheel.mesh = mesh;
 		wheel.meshIndex = meshIndex;
 
@@ -663,17 +789,24 @@ namespace SteeringWheels
 	{
 		cockpitObject = NULL;
 		vanillaWheelMesh = NULL;
-		selectedTeam = VANILLA;
+		selectedWheel = VANILLA;
 
-		for (int team = 0; team < NUM_TEAMS; team++)
+		cockpitWheelMeshes.clear();
+		carCockpitWheel.assign(numCars, VANILLA);
+		selectionLogged.assign(numCars, false);
+	}
+
+	int findCockpitWheel(const string& fileName)
+	{
+		for (size_t wheel = 0; wheel < cockpitWheelMeshes.size(); wheel++)
 		{
-			teamCockpitWheels[team].loaded = false;
-			teamCockpitWheels[team].owner = false;
-			teamCockpitWheels[team].mesh = NULL;
-			teamCockpitWheels[team].meshIndex = 0xffffffff;
-			teamCockpitWheels[team].fileName.clear();
-			selectionLogged[team] = false;
+			if (_stricmp(cockpitWheelMeshes[wheel].fileName.c_str(), fileName.c_str()) == 0)
+			{
+				return (int)wheel;
+			}
 		}
+
+		return VANILLA;
 	}
 
 	void loadCockpitWheels(BYTE* cockpit)
@@ -698,42 +831,60 @@ namespace SteeringWheels
 
 		BYTE shader = cockpitWheelShader();
 
-		for (int team = 0; team < NUM_TEAMS; team++)
+		// Each file is tried once, every car resolving to the same file shares the result
+		cockpitWheelMeshes.reserve(numCars);
+
+		for (int carIndex = 0; carIndex < numCars; carIndex++)
 		{
-			string assetName = carsFolderPath(teamFileName(cockpitFileName, team));
+			if (!validTeam(carSlot(carIndex)))
+			{
+				OutputGP4PPDebugString("Steering Wheels: car index " + to_string(carIndex + 1) + " has no valid team, using default cockpit steering wheel");
+				continue;
+			}
+
+			string assetName = carsFolderPath(carFileName(cockpitSettings.fileName, carIndex));
+			int wheel = findCockpitWheel(assetName);
+
+			if (wheel != VANILLA)
+			{
+				if (cockpitWheelMeshes[wheel].loaded)
+				{
+					carCockpitWheel[carIndex] = wheel;
+
+					OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " cockpit steering wheel shared [" + assetName + "]");
+				}
+				else
+				{
+					OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " cockpit steering wheel not available, using default [" + assetName + "]");
+				}
+
+				continue;
+			}
+
+			CockpitWheelMesh entry;
+			entry.loaded = false;
+			entry.mesh = NULL;
+			entry.meshIndex = 0xffffffff;
+			entry.fileName = assetName;
 
 			if (!assetFileExists(assetName))
 			{
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " cockpit steering wheel not found, using default [" + assetName + "]");
-				continue;
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " cockpit steering wheel not found, using default [" + assetName + "]");
 			}
-
-			teamCockpitWheels[team].fileName = assetName;
-
-			// Teams resolving to the same file share one mesh
-			for (int otherTeam = 0; otherTeam < team; otherTeam++)
+			else if (loadCockpitWheelMesh(cockpit, manager, shader, entry))
 			{
-				if (teamCockpitWheels[otherTeam].loaded && _stricmp(teamCockpitWheels[otherTeam].fileName.c_str(), assetName.c_str()) == 0)
-				{
-					teamCockpitWheels[team] = teamCockpitWheels[otherTeam];
-					teamCockpitWheels[team].owner = false;
-					break;
-				}
-			}
-
-			if (teamCockpitWheels[team].loaded)
-			{
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " cockpit steering wheel shared [" + assetName + "]");
-				continue;
-			}
-
-			if (loadCockpitWheelMesh(cockpit, manager, shader, team, assetName))
-			{
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " cockpit steering wheel loaded [" + assetName + "]");
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " cockpit steering wheel loaded [" + assetName + "]");
 			}
 			else
 			{
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(team) + " cockpit steering wheel failed to load, using default [" + assetName + "]");
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " cockpit steering wheel failed to load, using default [" + assetName + "]");
+			}
+
+			cockpitWheelMeshes.push_back(entry);
+
+			if (entry.loaded)
+			{
+				carCockpitWheel[carIndex] = (int)cockpitWheelMeshes.size() - 1;
 			}
 		}
 	}
@@ -749,46 +900,61 @@ namespace SteeringWheels
 		}
 	}
 
-	void selectCockpitWheel(BYTE* cockpit, int team)
+	int viewedCar()
 	{
-		int wantedTeam = (team >= 0 && team < NUM_TEAMS && teamCockpitWheels[team].loaded) ? team : VANILLA;
+		// Same lookup UpdateCockpitView makes right before the hooked call
+		int view = MemUtils::addressToValue<int>(currentView);
 
-		if (wantedTeam == selectedTeam)
+		if (view < 1)
+		{
+			return VANILLA;
+		}
+
+		return MemUtils::addressToValue<int>(viewCameraCar + (view - 1) * sizeof(DWORD));
+	}
+
+	void selectCockpitWheel(BYTE* cockpit, int carIndex)
+	{
+		bool validCar = carIndex >= 0 && carIndex < numCars;
+		int wantedWheel = validCar ? carCockpitWheel[carIndex] : VANILLA;
+
+		// Cars sharing a mesh do not need a switch
+		if (wantedWheel == selectedWheel)
 		{
 			return;
 		}
 
-		BYTE* previousMesh = selectedTeam == VANILLA ? vanillaWheelMesh : teamCockpitWheels[selectedTeam].mesh;
+		BYTE* previousMesh = selectedWheel == VANILLA ? vanillaWheelMesh : cockpitWheelMeshes[selectedWheel].mesh;
 
 		hideAllObjects(previousMesh);
 
-		if (wantedTeam == VANILLA)
+		if (wantedWheel == VANILLA)
 		{
 			field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) = vanillaWheelMesh;
 			writeMapping(cockpit, vanillaMapping);
 		}
 		else
 		{
-			field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) = teamCockpitWheels[wantedTeam].mesh;
-			writeMapping(cockpit, teamCockpitWheels[wantedTeam].mapping);
+			field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) = cockpitWheelMeshes[wantedWheel].mesh;
+			writeMapping(cockpit, cockpitWheelMeshes[wantedWheel].mapping);
 
-			if (!selectionLogged[wantedTeam])
+			if (!selectionLogged[carIndex])
 			{
-				selectionLogged[wantedTeam] = true;
+				selectionLogged[carIndex] = true;
 
-				OutputGP4PPDebugString("Steering Wheels: " + teamName(wantedTeam) + " cockpit steering wheel selected");
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " cockpit steering wheel selected [" + cockpitWheelMeshes[wantedWheel].fileName + "]");
 			}
 		}
 
-		selectedTeam = wantedTeam;
+		selectedWheel = wantedWheel;
 	}
 
 	void __fastcall cockpitUpdateFunc(BYTE* cockpit, void* /*edx*/, DWORD steeringAngle, int team)
 	{
-		// Select the mesh of the viewed team before GP4 updates the cockpit objects; it stays selected for the draw
+		// Select the mesh of the viewed car before GP4 updates the cockpit objects; it stays selected for the draw
 		if (cockpit != NULL && cockpit == cockpitObject)
 		{
-			selectCockpitWheel(cockpit, team);
+			selectCockpitWheel(cockpit, viewedCar());
 		}
 
 		// original function call
@@ -809,25 +975,24 @@ namespace SteeringWheels
 			if (manager != NULL)
 			{
 				// Free our meshes, highest index first
-				DWORD meshIndices[NUM_TEAMS];
-				int numMeshes = 0;
+				vector<DWORD> meshIndices;
 
-				for (int team = 0; team < NUM_TEAMS; team++)
+				for (const CockpitWheelMesh& wheel : cockpitWheelMeshes)
 				{
-					if (teamCockpitWheels[team].loaded && teamCockpitWheels[team].owner)
+					if (wheel.loaded)
 					{
-						meshIndices[numMeshes++] = teamCockpitWheels[team].meshIndex;
+						meshIndices.push_back(wheel.meshIndex);
 					}
 				}
 
-				sort(meshIndices, meshIndices + numMeshes, greater<DWORD>());
+				sort(meshIndices.begin(), meshIndices.end(), greater<DWORD>());
 
-				for (int i = 0; i < numMeshes; i++)
+				for (DWORD meshIndex : meshIndices)
 				{
-					RemoveMeshFunc(manager, meshIndices[i]);
+					RemoveMeshFunc(manager, meshIndex);
 				}
 
-				OutputGP4PPDebugString("Steering Wheels: " + to_string(numMeshes) + " cockpit steering wheel mesh(es) freed");
+				OutputGP4PPDebugString("Steering Wheels: " + to_string(meshIndices.size()) + " cockpit steering wheel mesh(es) freed");
 			}
 
 			resetCockpitState();
@@ -837,76 +1002,88 @@ namespace SteeringWheels
 		CockpitDestructorFunc(cockpit);
 	}
 
-	void LoadSettings(IniFile iniSettings)
+	void loadWheelSettings(IniFile& iniSettings, WheelSettings& settings)
 	{
 		try
 		{
-			externalWheels = iniSettings["SteeringWheels"]["External"].getAs<bool>();
+			settings.perTeam = iniSettings[settings.section]["PerTeam"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("Per-Team External Steering Wheels : " + string(externalWheels ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Per Team " + settings.name + ": " + (settings.perTeam ? "Enabled" : "Disabled"));
 
 		try
 		{
-			cockpitWheels = iniSettings["SteeringWheels"]["Cockpit"].getAs<bool>();
+			settings.perDriver = iniSettings[settings.section]["PerDriver"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("Per-Team Cockpit Steering Wheels : " + string(cockpitWheels ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Per Driver " + settings.name + ": " + (settings.perDriver ? "Enabled" : "Disabled"));
 
 		try
 		{
-			autoName = iniSettings["SteeringWheels"]["AutoName"].getAs<bool>();
+			settings.autoName = iniSettings[settings.section]["AutoName"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("AutoName Steering Wheels: " + string(autoName ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("AutoName " + settings.name + ": " + (settings.autoName ? "Enabled" : "Disabled"));
 
-		if (!autoName)
+		if (settings.autoName)
+		{
+			// PerDriver supersedes PerTeam; with neither, GP4's own steering wheel is used
+			if (settings.perDriver)
+			{
+				settings.fileName = settings.perDriverFileName;
+			}
+			else if (settings.perTeam)
+			{
+				settings.fileName = settings.perTeamFileName;
+			}
+
+			settings.enabled = settings.perTeam || settings.perDriver;
+
+			if (settings.enabled)
+			{
+				OutputGP4PPDebugString("File name computed for " + settings.name + ": " + settings.fileName);
+			}
+		}
+		else
 		{
 			try
 			{
-				externalFileName = iniSettings["SteeringWheels"]["ExternalFileName"].getAs<string>();
+				settings.fileName = iniSettings[settings.section]["FileName"].getAs<string>();
 			}
 			catch (exception ex) {}
 
-			try
+			// An empty file name means GP4's own steering wheel
+			settings.enabled = !settings.fileName.empty();
+
+			if (settings.enabled)
 			{
-				cockpitFileName = iniSettings["SteeringWheels"]["CockpitFileName"].getAs<string>();
+				OutputGP4PPDebugString("File name loaded for " + settings.name + ": " + settings.fileName);
 			}
-			catch (exception ex) {}
 		}
 
-		//Fall back to default names
-		if (autoName || externalFileName.empty())
-		{
-			externalFileName = defaultExternalFileName;
-		}
+		OutputGP4PPDebugString(settings.name + ": " + (settings.enabled ? "Enabled" : "Disabled, using default"));
+	}
 
-		if (autoName || cockpitFileName.empty())
-		{
-			cockpitFileName = defaultCockpitFileName;
-		}
-
-		OutputGP4PPDebugString("File name for External Steering Wheels: " + externalFileName);
-		OutputGP4PPDebugString("File name for Cockpit Steering Wheels: " + cockpitFileName);
+	void LoadSettings(IniFile iniSettings)
+	{
+		loadWheelSettings(iniSettings, externalSettings);
+		loadWheelSettings(iniSettings, cockpitSettings);
 	}
 
 	void ApplyPatches()
 	{
+		bool countsRead = (externalSettings.enabled || cockpitSettings.enabled) && readCarCounts();
+
 		// External steering wheels: texture loading, render and stage flush calls
-		if (externalWheels)
+		if (externalSettings.enabled && countsRead)
 		{
 			if (checkCallBytes(initCarSteeringWheelsCall, initCarSteeringWheelsBytes, "InitCarSteeringWheels")
 				&& checkCallBytes(renderCarSteeringWheelsCall, renderCarSteeringWheelsBytes, "RenderCarSteeringWheels")
 				&& checkCallBytes(individualWheelFlushCall, individualWheelFlushBytes, "DeviceFlushState"))
 			{
-				for (int team = 0; team < NUM_TEAMS; team++)
-				{
-					teamTextureIndex[team] = -1;
-				}
-
 				MemUtils::injectFunctionCall(initCarSteeringWheelsCall, PtrToUlong(initCarSteeringWheelsFunc), VAR_NAME(initCarSteeringWheelsFunc));
 
 				MemUtils::injectFunctionCall(individualWheelFlushCall, PtrToUlong(individualWheelFlushFunc), VAR_NAME(individualWheelFlushFunc));
@@ -918,7 +1095,7 @@ namespace SteeringWheels
 		}
 
 		// Cockpit steering wheel: mesh loading, per-frame selection and clean-up calls
-		if (cockpitWheels)
+		if (cockpitSettings.enabled && countsRead)
 		{
 			if (checkCallBytes(cockpitLoadMeshCall, cockpitLoadMeshBytes, "CGP4Cockpit::LoadMesh")
 				&& checkCallBytes(cockpitUpdateCall, cockpitUpdateBytes, "CGP4Cockpit update")
@@ -926,7 +1103,7 @@ namespace SteeringWheels
 			{
 				resetCockpitState();
 
-				// Destructor first, so that a cockpit with team meshes can never be destroyed without clean-up
+				// Destructor first, so that a cockpit with our meshes can never be destroyed without clean-up
 				MemUtils::injectFunctionCall(cockpitDestructorCall, PtrToUlong(cockpitDestructorFunc), VAR_NAME(cockpitDestructorFunc));
 
 				MemUtils::injectFunctionCall(cockpitUpdateCall, PtrToUlong(cockpitUpdateFunc), VAR_NAME(cockpitUpdateFunc));
@@ -937,7 +1114,7 @@ namespace SteeringWheels
 			}
 		}
 
-		OutputGP4PPDebugString("Per-Team External Steering Wheels patch : " + string(externalPatched ? "Applied" : "Not applied"));
-		OutputGP4PPDebugString("Per-Team Cockpit Steering Wheels patch : " + string(cockpitPatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("External Steering Wheels patch : " + string(externalPatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("Cockpit Steering Wheels patch : " + string(cockpitPatched ? "Applied" : "Not applied"));
 	}
 };
