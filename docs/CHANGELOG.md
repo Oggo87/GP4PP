@@ -1,7 +1,7 @@
 # Version History
 
 * Unreleased
-    * Added support for per-team and per-car steering wheels, both the external steering wheel texture and the in-cockpit steering wheel mesh. See [Steering Wheels Settings](Steering-Wheels-Settings.md) for more details. Concept and initinal reverse engineering from the ZaZ GP4 Tools proof of concept by [Ronald 'ZaZ' Plukker](https://github.com/RonaldZaZ)
+    * Added support for per-team and per-car steering wheels, both the external steering wheel texture and the in-cockpit steering wheel mesh, as well as cockpit dashes. See [Steering Wheels Settings](Steering-Wheels-Settings.md) for more details. Concept and initinal reverse engineering from the ZaZ GP4 Tools proof of concept by [Ronald 'ZaZ' Plukker](https://github.com/RonaldZaZ)
 * 2.2.2
     * Added support for forcing the z-buffer format used by D3D directly from within GP4
 * 2.2.1

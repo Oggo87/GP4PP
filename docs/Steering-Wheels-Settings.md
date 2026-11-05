@@ -1,9 +1,10 @@
 # Steering Wheels Settings
 
-These sections contain entries to give each team, or each car, its own steering wheel. GP4 normally uses a single steering wheel for everyone: one texture (`stwheel.tex`) for the external steering wheels of all cars, and one mesh (`cockpit_wheel.gp4`) for the steering wheel seen from the cockpit view.
+These sections contain entries to give each team, or each car, its own steering wheel and cockpit dash. GP4 normally uses a single steering wheel for everyone: one texture (`stwheel.tex`) for the external steering wheels of all cars, and one mesh (`cockpit_wheel.gp4`) for the steering wheel seen from the cockpit view. Likewise, a single mesh (`cockpit_dash.gp4`) is used for the dash of every car.
 
 * [ExternalSteeringWheels](#ExternalSteeringWheels)
 * [CockpitSteeringWheels](#CockpitSteeringWheels)
+* [CockpitDashes](#CockpitDashes)
 * [PerTeam and PerDriver](#PerTeam-and-PerDriver)
 * [AutoName](#AutoName)
 * [FileName](#FileName)
@@ -20,16 +21,22 @@ PerTeam = false
 PerDriver = false
 AutoName = true
 FileName = 
+
+[CockpitDashes]
+PerTeam = false
+PerDriver = false
+AutoName = true
+FileName = 
 ```
 
-Both sections work the same way and are independent of each other. Both are disabled by default, and GP4's own steering wheel is used.
+All sections work the same way and are independent of each other. All are disabled by default, and GP4's own steering wheels and dash are used.
 
 A section is enabled when:
 
 * `AutoName` is enabled and `PerTeam` or `PerDriver` is enabled, or
 * `AutoName` is disabled and `FileName` is not empty
 
-Every car is handled individually: the file name decides whether two cars share a steering wheel. Every car that has its own file gets its own steering wheel, while cars without one keep the default GP4 steering wheel. All files are checked the same way GP4 checks its own assets, so they can be placed in `cars.wad` or, when GP4 does not use the WAD, in the `cars` folder.
+Every car is handled individually: the file name decides whether two cars share a steering wheel or dash. Every car that has its own file gets its own steering wheel or dash, while cars without one keep the default GP4 one. All files are checked the same way GP4 checks its own assets, so they can be placed in `cars.wad` or, when GP4 does not use the WAD, in the `cars` folder.
 
 ## ExternalSteeringWheels
 
@@ -47,18 +54,28 @@ The meshes are loaded together with the default cockpit meshes, once per file, a
 
 The meshes use the same shader as the default cockpit steering wheel, so they follow the [Steering Wheel Advanced Car Shader](General-Settings.md#Steering-Wheel-Advanced-Car-Shader) setting.
 
-### Textures used by a cockpit mesh
+## CockpitDashes
+
+Per-team or per-car dash meshes in the cockpit view.
+
+Each mesh is a full replacement for `cars\cockpits\cockpit_dash.gp4`, and works the same way as the cockpit steering wheel meshes: it is selected automatically for the car being viewed, it is loaded once per file and released when returning to the menu, and it uses the same shader as the default cockpit dash.
+
+Dashes and cockpit steering wheels are independent of each other, and can be per team or per car separately. Displays, lights and buttons keep working for every object the dash and steering wheel of the viewed car contain, using the same object names as the default meshes.
+
+## Textures used by a cockpit mesh
 
 GP4 looks for the textures used by a `.gp4` mesh in the folder of the mesh itself, and loads each texture only once per full path. Two meshes in the same folder that use a texture with the same name therefore share that texture, and a mesh placed next to the default `cockpit_wheel.gp4` would show the default steering wheel textures wherever the names match.
 
 For this reason, the default naming puts each mesh in its own subfolder, together with its textures. Meshes can then use the same texture names as the default mesh, and as each other, without conflicts.
 
+Cockpit dashes use the same subfolders by default, so a team's or car's cockpit dash and steering wheel are kept together, and share any texture with the same name.
+
 ## PerTeam and PerDriver
 
 These settings only have an effect on the file names when [`AutoName`](#AutoName) is enabled.
 
-* `PerTeam` gives each team its own steering wheel, shared by both of its cars.
-* `PerDriver` gives each car its own steering wheel. As for the other assets, `PerDriver` supersedes `PerTeam`.
+* `PerTeam` gives each team its own steering wheel or dash, shared by both of its cars.
+* `PerDriver` gives each car its own steering wheel or dash. As for the other assets, `PerDriver` supersedes `PerTeam`.
 
 ## AutoName
 
@@ -68,29 +85,33 @@ When enabled, the file names below are used, depending on `PerTeam` and `PerDriv
 |---|---|---|
 | External steering wheel texture | `stwheel_{teamname}.tga` | `stwheel_{teamname}_car{car}.tga` |
 | Cockpit steering wheel mesh | `cockpits\{teamname}\cockpit_wheel.gp4` | `cockpits\{teamname}_car{car}\cockpit_wheel.gp4` |
+| Cockpit dash mesh | `cockpits\{teamname}\cockpit_dash.gp4` | `cockpits\{teamname}_car{car}\cockpit_dash.gp4` |
 
-Example - Ferrari's steering wheels with `PerTeam` enabled in both sections
+Example - Ferrari's steering wheels and dash with `PerTeam` enabled in all sections
 
 ```
 cars\stwheel_ferrari.tex
 cars\cockpits\ferrari\cockpit_wheel.gp4
-cars\cockpits\ferrari\<textures used by the mesh>.tex
+cars\cockpits\ferrari\cockpit_dash.gp4
+cars\cockpits\ferrari\<textures used by the meshes>.tex
 ```
 
-Example - Ferrari's steering wheels with `PerDriver` enabled in both sections
+Example - Ferrari's steering wheels and dashes with `PerDriver` enabled in all sections
 
 ```
 cars\stwheel_ferrari_car1.tex
 cars\stwheel_ferrari_car2.tex
 cars\cockpits\ferrari_car1\cockpit_wheel.gp4
-cars\cockpits\ferrari_car1\<textures used by the mesh>.tex
+cars\cockpits\ferrari_car1\cockpit_dash.gp4
+cars\cockpits\ferrari_car1\<textures used by the meshes>.tex
 cars\cockpits\ferrari_car2\cockpit_wheel.gp4
-cars\cockpits\ferrari_car2\<textures used by the mesh>.tex
+cars\cockpits\ferrari_car2\cockpit_dash.gp4
+cars\cockpits\ferrari_car2\<textures used by the meshes>.tex
 ```
 
 ## FileName
 
-Used when [`AutoName`](#AutoName) is disabled, this setting allows to specify a custom file name pattern, relative to the `cars` folder. When left empty, GP4's own steering wheel is used. For the texture, GP4 always loads a `.tex` file: any extension (`.tga`, `.tex`) is replaced by `.tex`, and `.tex` is added when there is none. The mesh name has to include `.gp4`.
+Used when [`AutoName`](#AutoName) is disabled, this setting allows to specify a custom file name pattern, relative to the `cars` folder. When left empty, GP4's own steering wheel or dash is used. For the texture, GP4 always loads a `.tex` file: any extension (`.tga`, `.tex`) is replaced by `.tex`, and `.tex` is added when there is none. Mesh names have to include `.gp4`.
 
 4 `{variables}` are available to use in the file names, enclosed in curly brackets:
 
@@ -99,9 +120,9 @@ Used when [`AutoName`](#AutoName) is disabled, this setting allows to specify a 
 * `{car}` - indexed 1 and 2 for first and second car of the team
 * `{driverindex}` - the car index, indexed 1 through 22
 
-Whether a steering wheel is per team or per car only depends on the variables used: a name with `{car}` or `{driverindex}` gives each car its own file, a name with only `{teamname}` or `{team}` is shared by both cars of a team.
+Whether a steering wheel or dash is per team or per car only depends on the variables used: a name with `{car}` or `{driverindex}` gives each car its own file, a name with only `{teamname}` or `{team}` is shared by both cars of a team.
 
-`{driver}` (the driver number) is not available: the cockpit steering wheels are loaded before GP4 creates the cars, when the driver numbers are not known yet.
+`{driver}` (the driver number) is not available: the cockpit steering wheels and dashes are loaded before GP4 creates the cars, when the driver numbers are not known yet.
 
 Subfolders can be included as part of the file name. Please note that the directory separator character has to be escaped and written as `\\`.
 
