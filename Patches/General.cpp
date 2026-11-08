@@ -12,6 +12,8 @@ namespace General
 	bool fix3DWheelsTreadMapping = false;
 	bool fix3DWheelsCockpitView = false;
 	bool stWheelAdvancedCarShader = false;
+	bool showOpponentsFuelLaps = false;
+	bool opponentsFuelLapsPatched = false;
 	bool fixProjectedShadows = false;
 
 	//Target Addresses
@@ -36,6 +38,10 @@ namespace General
 	DWORD d3dMatrixAddr_0xc0 = 0x00a4d5a0;
 
 	DWORD ptrCockpitWheels = 0x00a4d684;
+
+	//LcdWriteFuel: jnz to the fuel display when not in a race, falling through to the opponents' "--.-" checks
+	DWORD opponentsFuelLapsJump = 0x0051518e;
+	BYTE opponentsFuelLapsJumpBytes[] = { 0x0f, 0x85, 0xa9, 0x00, 0x00, 0x00 };
 
 	//Tyre Tread Variables
 	float(*d3dMatrix_0xc0)[4][4], (*d3dMatrix_0xbc)[4][4], (*d3dMatrix_0xb8)[4][4];
@@ -153,7 +159,16 @@ namespace General
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Advanced Car Shader for Cockpit Steering Wheel : " + string(stWheelAdvancedCarShader ? "Enabled" : "Disabled"));
+  
+		// Show the opponents' fuel laps in a race
+		try
+		{
+			showOpponentsFuelLaps = iniSettings["Settings"]["ShowOpponentsFuelLaps"].getAs<bool>();
+		}
+		catch (exception ex) {}
 
+		OutputGP4PPDebugString("Show Opponents Fuel Laps : " + string(showOpponentsFuelLaps ? "Enabled" : "Disabled"));
+    
 		// Fix projected shadows of long cars
 		try
 		{
@@ -162,6 +177,11 @@ namespace General
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Fix Projected Shadows : " + string(fixProjectedShadows ? "Enabled" : "Disabled"));
+	}
+
+	bool IsOpponentsFuelLapsPatched()
+	{
+		return opponentsFuelLapsPatched;
 	}
 
 	void ApplyPatches()
@@ -201,6 +221,23 @@ namespace General
 			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
 		}
 
+		// Apply Show Opponents Fuel Laps Patch
+		if (showOpponentsFuelLaps)
+		{
+			//Patch the jnz to a jmp to the same target, so every car shows its fuel laps in a race too
+			if (memcmp(MemUtils::addressToPtr<BYTE>(opponentsFuelLapsJump), opponentsFuelLapsJumpBytes, sizeof(opponentsFuelLapsJumpBytes)) == 0)
+			{
+				BYTE fuelLapsPatch[] = { 0xe9, 0xaa, 0x00, 0x00, 0x00, 0x90 }; //jmp 0x0051523d - nop
+				GP4MemLib::MemUtils::patchAddress((LPVOID)opponentsFuelLapsJump, fuelLapsPatch, sizeof(fuelLapsPatch));
+
+				opponentsFuelLapsPatched = true;
+			}
+			else
+			{
+				OutputGP4PPDebugString("Show Opponents Fuel Laps : unexpected bytes at " + MemUtils::dwordToString(opponentsFuelLapsJump) + " (LcdWriteFuel), opponents' fuel laps stay hidden");
+			}
+
+			OutputGP4PPDebugString("Show Opponents Fuel Laps patch : " + string(opponentsFuelLapsPatched ? "Applied" : "Not applied"));
 		// Apply Fix Projected Shadows Patch
 		if (fixProjectedShadows)
 		{

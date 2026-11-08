@@ -5,6 +5,7 @@
 #include "Patches/Assets.h"
 #include "Patches/Pitcrew.h"
 #include "Patches/RearLight.h"
+#include "Patches/SteeringWheels.h"
 #include "Utils/Tweaker.h"
 #include "Utils/Helpers.h"
 #include "IniLib/IniLib.h"
@@ -53,6 +54,9 @@ DWORD WINAPI MainThread(LPVOID param)
 		// Load Rear Light Settings
 		RearLight::LoadSettings(iniSettings);
 
+		// Load Steering Wheels Settings
+		SteeringWheels::LoadSettings(iniSettings);
+
 		//Initialize Tweaker Hook
 		Tweaker::Hook(iniSettings);
 
@@ -84,6 +88,9 @@ DWORD WINAPI MainThread(LPVOID param)
 
 	//Apply Rear Light patches
 	RearLight::ApplyPatches();
+
+	//Apply Steering Wheels patches
+	SteeringWheels::ApplyPatches();
 
 	return 0;
 }

@@ -61,6 +61,9 @@
     <None Include="docs\D3D-Settings.md">
       <Filter>Docs</Filter>
     </None>
+    <None Include="docs\Steering-Wheels-Settings.md">
+      <Filter>Docs</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GP4PP.cpp">
@@ -88,6 +91,9 @@
       <Filter>Utils</Filter>
     </ClCompile>
     <ClCompile Include="Patches\D3D.cpp">
+      <Filter>Patches\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Patches\SteeringWheels.cpp">
       <Filter>Patches\Source</Filter>
     </ClCompile>
   </ItemGroup>
@@ -132,6 +138,9 @@
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="Patches\D3D.h">
+      <Filter>Patches\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Patches\SteeringWheels.h">
       <Filter>Patches\Header</Filter>
     </ClInclude>
   </ItemGroup>

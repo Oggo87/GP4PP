@@ -1,12 +1,13 @@
 # General Settings
 
-This section contains six entries:
+This section contains seven entries:
 
 * [Disable CD Check](#Disable-CD-Check)
 * [Fix 3D Wheels](#Fix-3D-Wheels)
 * [Track Folders](#Track-Folders)
 * [Cockpit Visor](#Cockpit-Visor)
 * [Steering Wheel Advanced Car Sahder](#Steering-Wheel-Advanced-Car-Shader)
+* [Show Opponents Fuel Laps](#Show-Opponents-Fuel-Laps)
 * [Fix Projected Shadows](#Fix-Projected-Shadows)
 
 ```ini
@@ -17,6 +18,7 @@ Fix3DWheelsCockpitView = false
 TrackFolders = false
 CockpitVisor = false
 StWheelAdvancedCarShader = false
+ShowOpponentsFuelLaps = false
 FixProjectedShadows = false
 ```
 
@@ -82,6 +84,11 @@ This setting allows to enable using GP4's built-in advanced car shader (the same
 
 Advanced Car Shader does not support alpha-blending, so if the steering wheel mesh uses any alpha-blending textures (for example, for cutouts or holes in the mesh), those parts will appear fully opaque when this setting is enabled. It is intended to be used with full 3D steering wheel meshes that do not rely on alpha-blending.
 
+## Show Opponents Fuel Laps
+
+In a race, GP4 only shows the fuel laps of the player's car: when viewing another car's cockpit, its fuel laps are shown as `--.-`. When this setting is enabled, every car shows its own fuel laps, on the dash and steering wheel digits as well as on the LCD. Outside a race GP4 already shows every car's fuel laps, so nothing changes there.
+
+It also applies to the 3D external steering wheels (see [UseCockpitMesh](Steering-Wheels-Settings.md#UseCockpitMesh)), which otherwise show `--.-` for every car but the player's, as GP4's own dash does.
 ## Fix Projected Shadows
 
 With projected shadows, GP4 draws each car's shadow into a shadow map that only covers 3.45 units around the car's origin. The shadow of a car that is significantly longer or larger than the original ones goes past the edge of the map and is cut off or looks stretched, especially at the tail and when the sun is low, as the shadow gets longer.
