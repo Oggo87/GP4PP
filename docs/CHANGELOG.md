@@ -1,15 +1,18 @@
 # Version History
 
 * Unreleased
+    * Added option to fix the projected shadows of cars significantly longer or larger than the original ones, which were cut off at the edge of the shadow map. See [General Settings](General-Settings.md#Fix-Projected-Shadows) for more details
     * Added support for per-team and per-car steering wheels, both the external steering wheel texture and the in-cockpit steering wheel mesh, as well as cockpit dashes. See [Steering Wheels Settings](Steering-Wheels-Settings.md) for more details. Concept and initinal reverse engineering from the ZaZ GP4 Tools proof of concept by [Ronald 'ZaZ' Plukker](https://github.com/RonaldZaZ)
     * Added option to draw the external steering wheels in 3D, using each car's cockpit steering wheel mesh. See [Steering Wheels Settings](Steering-Wheels-Settings.md#UseCockpitMesh) for more details. GP4's gloves and arms are kept on the 3D external steering wheels
     * Added option to show the fuel laps of every car in a race, in the cockpit and on the 3D external steering wheels. See [General Settings](General-Settings.md#Show-Opponents-Fuel-Laps) for more details
-    * Added option to fix the projected shadows of cars significantly longer or larger than the original ones, which were cut off at the edge of the shadow map. See [General Settings](General-Settings.md#Fix-Projected-Shadows) for more details
+
 * 2.2.2
     * Added support for forcing the z-buffer format used by D3D directly from within GP4
+
 * 2.2.1
     * Added support for overriding brake light behaviour from GP4 Tweaker. See [Tweaker Settings](Tweaker-Settings.md) for more details.
     * Decoupled the reveresed tread mapping fix between external and cockpit views. Credits to [node91](https://github.com/node91)
+
 * 2.2
     * Added Rear Light Settings to control rear light behaviour in wet weather, when braking, when pit limiter is active and when charging ERS
     * Added back-end support for reading car's dynamic data in real time. Credits to [René 'SDI' Smit](https://github.com/sdidit) and [Paulo 'Prblanco' Blanco](https://github.com/Prblanco) for their extensive work

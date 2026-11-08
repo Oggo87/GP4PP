@@ -212,32 +212,6 @@ namespace General
 			GP4MemLib::MemUtils::patchAddress((LPVOID)shaderPatchAddress, shaderPatch, sizeof(shaderPatch));
 		}
 
-		// Apply Advanced Car Shader for in-cockpit steering wheel Patch
-		if (stWheelAdvancedCarShader)
-		{
-			//Patch to set the steering wheel in cockpit view to use the advanced car shader (0x12)
-			DWORD carShaderPatchAddress = 0x0046faf3;
-			BYTE carShaderPatch = { 0x12 };
-			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
-		}
-
-		// Apply Show Opponents Fuel Laps Patch
-		if (showOpponentsFuelLaps)
-		{
-			//Patch the jnz to a jmp to the same target, so every car shows its fuel laps in a race too
-			if (memcmp(MemUtils::addressToPtr<BYTE>(opponentsFuelLapsJump), opponentsFuelLapsJumpBytes, sizeof(opponentsFuelLapsJumpBytes)) == 0)
-			{
-				BYTE fuelLapsPatch[] = { 0xe9, 0xaa, 0x00, 0x00, 0x00, 0x90 }; //jmp 0x0051523d - nop
-				GP4MemLib::MemUtils::patchAddress((LPVOID)opponentsFuelLapsJump, fuelLapsPatch, sizeof(fuelLapsPatch));
-
-				opponentsFuelLapsPatched = true;
-			}
-			else
-			{
-				OutputGP4PPDebugString("Show Opponents Fuel Laps : unexpected bytes at " + MemUtils::dwordToString(opponentsFuelLapsJump) + " (LcdWriteFuel), opponents' fuel laps stay hidden");
-			}
-
-			OutputGP4PPDebugString("Show Opponents Fuel Laps patch : " + string(opponentsFuelLapsPatched ? "Applied" : "Not applied"));
 		// Apply Fix Projected Shadows Patch
 		if (fixProjectedShadows)
 		{
@@ -264,6 +238,35 @@ namespace General
 			{
 				OutputGP4PPDebugString("Fix Projected Shadows : unexpected bytes in BuildCarShadowDecals or at the shadow map coverage, patch not applied");
 			}
+		}
+
+		// Apply Advanced Car Shader for in-cockpit steering wheel Patch
+		if (stWheelAdvancedCarShader)
+		{
+			//Patch to set the steering wheel in cockpit view to use the advanced car shader (0x12)
+			DWORD carShaderPatchAddress = 0x0046faf3;
+			BYTE carShaderPatch = { 0x12 };
+			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
+		}
+
+		// Apply Show Opponents Fuel Laps Patch
+		if (showOpponentsFuelLaps)
+		{
+			//Patch the jnz to a jmp to the same target, so every car shows its fuel laps in a race too
+			if (memcmp(MemUtils::addressToPtr<BYTE>(opponentsFuelLapsJump), opponentsFuelLapsJumpBytes, sizeof(opponentsFuelLapsJumpBytes)) == 0)
+			{
+				BYTE fuelLapsPatch[] = { 0xe9, 0xaa, 0x00, 0x00, 0x00, 0x90 }; //jmp 0x0051523d - nop
+				GP4MemLib::MemUtils::patchAddress((LPVOID)opponentsFuelLapsJump, fuelLapsPatch, sizeof(fuelLapsPatch));
+
+				opponentsFuelLapsPatched = true;
+			}
+			else
+			{
+				OutputGP4PPDebugString("Show Opponents Fuel Laps : unexpected bytes at " + MemUtils::dwordToString(opponentsFuelLapsJump) + " (LcdWriteFuel), opponents' fuel laps stay hidden");
+			}
+
+
+			OutputGP4PPDebugString("Show Opponents Fuel Laps patch : " + string(opponentsFuelLapsPatched ? "Applied" : "Not applied"));
 		}
 	};
 };
