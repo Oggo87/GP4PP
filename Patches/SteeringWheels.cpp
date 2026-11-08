@@ -99,6 +99,16 @@ namespace SteeringWheels
 	BYTE cockpitUpdateBytes[] = { 0xe8, 0xc5, 0x35, 0xfd, 0xff };
 	BYTE cockpitDestructorBytes[] = { 0xe8, 0xc7, 0x74, 0xfd, 0xff };
 
+	// DrawCarSteeringWheels instructions replaced by a jump, for the gloves and arms of the 3D external wheels
+	DWORD wheelIndexBlockAdd = 0x0048b4d3;		// add ecx, <offset of the last car's indices>, ecx = locked index buffer
+	DWORD wheelVertexUnlock = 0x0048c32a;		// mov eax, [esi] - push esi - call [eax + 0x30], vertex buffer unlock
+	BYTE wheelIndexBlockAddBytes[] = { 0x81, 0xc1 };
+	BYTE wheelVertexUnlockBytes[] = { 0x8b, 0x06, 0x56, 0xff, 0x50, 0x30 };
+
+	// Jump Back Addresses
+	DWORD wheelIndexBlockAddJumpBack = 0x0048b4d9;
+	DWORD wheelVertexUnlockJumpBack = 0x0048c330;
+
 	// Vars and Data Addresses
 	DWORD arrCars = 0x00a51fd8;
 	DWORD arrTeamNames = 0x00643ba8;
@@ -129,6 +139,7 @@ namespace SteeringWheels
 	DWORD driverStatusEnabled = 0x007aafd4;		// byte
 	DWORD bestLapOrder = 0x00675958;			// car ids by best lap, position outside a race
 	DWORD numBestLapOrder = 0x0066d8ec;			// dword
+	DWORD stWheelCarsDrawn = 0x00a4d6a0;		// dword, cars written to the external wheel buffers this frame
 
 	// Function Addresses
 	DWORD InitCarSteeringWheels = 0x0048b2c0;
@@ -264,6 +275,10 @@ namespace SteeringWheels
 	const DWORD LOD_ENTRY_CAR = 0x00;
 	const DWORD LOD_ENTRY_DISTANCE = 0x04;
 	const DWORD LOD_ENTRY_VISIBLE = 0x74;
+
+	// Flat external wheel indices per car: 7 quads of 6 indices, wheel front, back, rev lights, gloves, arms
+	const int WHEEL_BLOCK_INDICES = 42;
+	const int WHEEL_ONLY_INDICES = 18;			// wheel front, back and rev lights, the gloves and arms follow
 
 	const DWORD DEVICE_MANAGER = 0x04;
 	const DWORD DEVICE_D3D_DEVICE = 0x08;
@@ -446,6 +461,14 @@ namespace SteeringWheels
 	// 3D external wheels storage variables
 	vector<BYTE*> meshCars;				// cars drawn with the cockpit mesh, flat wheel hidden for the original call
 	vector<BYTE> oldWheelVisible;
+	int numFrameMeshCars = 0;			// meshCars entries of the current external draw
+	int frameSkipCar = -1;				// car not drawn by the current external draw, -1 = none
+	bool glovesPatched = false;			// GP4 keeps drawing the gloves and arms of the 3D wheel cars
+	int numWheelBlocks = 0;				// cars that fit in the flat wheel buffers, read from GP4's code by readWheelBlockCount()
+	DWORD wheelIndexBlockOffset = 0;	// bytes from the start of the index buffer to the last car's indices
+	WORD* wheelIndexBuffer = NULL;		// locked index buffer of the current external draw
+	vector<int> hiddenWheelBlocks;		// blocks of the 3D wheel cars in the current external draw
+	bool wheelBlocksLogged = false;
 	map<BYTE*, ExternalWheelObjects> externalWheelObjects;	// per cockpit wheel mesh
 	vector<BYTE*> drawnMeshes;			// meshes whose objects were changed by the current external draw
 	int numDynamicData = 0;				// read from GP4's code by readDynamicDataCount(), 0 = no gears and flags
@@ -630,6 +653,36 @@ namespace SteeringWheels
 		return true;
 	}
 
+	bool readWheelBlockCount()
+	{
+		BYTE* add = MemUtils::addressToPtr<BYTE>(wheelIndexBlockAdd);
+
+		if (memcmp(add, wheelIndexBlockAddBytes, sizeof(wheelIndexBlockAddBytes)) != 0
+			|| memcmp(MemUtils::addressToPtr<BYTE>(wheelVertexUnlock), wheelVertexUnlockBytes, sizeof(wheelVertexUnlockBytes)) != 0)
+		{
+			OutputGP4PPDebugString("Steering Wheels: unexpected bytes in DrawCarSteeringWheels, no gloves and arms on the 3D external steering wheels");
+			return false;
+		}
+
+		// The operand is the byte offset of the last car's indices, the cars without a light map fill from the start
+		DWORD offset = *reinterpret_cast<DWORD*>(add + sizeof(wheelIndexBlockAddBytes));
+		DWORD blockSize = WHEEL_BLOCK_INDICES * sizeof(WORD);
+
+		if (offset == 0 || offset % blockSize != 0 || offset / blockSize + 1 < (DWORD)numCars)
+		{
+			OutputGP4PPDebugString("Steering Wheels: unexpected index buffer size " + MemUtils::dwordToString(offset) + " in DrawCarSteeringWheels, no gloves and arms on the 3D external steering wheels");
+			return false;
+		}
+
+		wheelIndexBlockOffset = offset;
+		numWheelBlocks = offset / blockSize + 1;
+		hiddenWheelBlocks.resize(numWheelBlocks);
+
+		OutputGP4PPDebugString("Steering Wheels: " + to_string(numWheelBlocks) + " cars in the external wheel buffers");
+
+		return true;
+	}
+
 	//
 	// External steering wheels
 	//
@@ -754,10 +807,143 @@ namespace SteeringWheels
 
 	int drawCockpitMeshWheels(BYTE* device, int skipCar);
 
+	bool isFrameMeshCar(BYTE* car)
+	{
+		for (int i = 0; i < numFrameMeshCars; i++)
+		{
+			if (meshCars[i] == car)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	void __cdecl hideMeshCarWheels()
+	{
+		BYTE* lodManager = MemUtils::addressToValue<BYTE*>(lodManagerPointer);
+
+		if (wheelIndexBuffer == NULL || numFrameMeshCars == 0 || lodManager == NULL)
+		{
+			return;
+		}
+
+		// Same car selection and buffer order as DrawCarSteeringWheels: no light map from the start, light map from the end
+		float maxDistance = MemUtils::addressToValue<float>(stWheelMaxDistance);
+		DWORD numEntries = field<DWORD>(lodManager, LOD_NUM_ENTRIES);
+		BYTE* entry = lodManager + LOD_ENTRIES;
+		int numFront = 0;
+		int numBack = 0;
+		int numHidden = 0;
+		bool matched = true;
+
+		for (DWORD entryIndex = 0; entryIndex < numEntries; entryIndex++, entry += LOD_ENTRY_SIZE)
+		{
+			int carIndex = field<int>(entry, LOD_ENTRY_CAR);
+
+			if (frameSkipCar != -1 && carIndex == frameSkipCar)
+			{
+				continue;
+			}
+
+			if (field<BYTE>(entry, LOD_ENTRY_VISIBLE) == 0 || !(field<float>(entry, LOD_ENTRY_DISTANCE) < maxDistance))
+			{
+				continue;
+			}
+
+			BYTE* car = (carIndex >= 0 && carIndex < numCars) ? carAt(carIndex) : NULL;
+
+			if (car == NULL)
+			{
+				// GP4 does not check the car index, so the buffer order can't be followed
+				matched = false;
+				break;
+			}
+
+			if (field<BYTE>(car, CAR_WHEEL_VISIBLE) == 0)
+			{
+				continue;
+			}
+
+			if (numFront + numBack >= numWheelBlocks)
+			{
+				matched = false;
+				break;
+			}
+
+			int block = (field<int>(car, CAR_WHEEL_TEXTURE) == -1) ? numFront++ : numWheelBlocks - 1 - numBack++;
+
+			if (isFrameMeshCar(car))
+			{
+				hiddenWheelBlocks[numHidden++] = block;
+			}
+		}
+
+		// Only touch the buffer when every car GP4 wrote was accounted for
+		if (!matched || numFront + numBack != MemUtils::addressToValue<int>(stWheelCarsDrawn))
+		{
+			if (!wheelBlocksLogged)
+			{
+				wheelBlocksLogged = true;
+
+				OutputGP4PPDebugString("Steering Wheels: external wheel buffer order not matched, flat wheel kept on the 3D wheel cars");
+			}
+
+			return;
+		}
+
+		// Collapse the wheel front, back and rev lights to a point, the gloves and arms stay
+		for (int i = 0; i < numHidden; i++)
+		{
+			WORD* indices = wheelIndexBuffer + hiddenWheelBlocks[i] * WHEEL_BLOCK_INDICES;
+			WORD first = indices[0];
+
+			for (int j = 1; j < WHEEL_ONLY_INDICES; j++)
+			{
+				indices[j] = first;
+			}
+		}
+	}
+
+	__declspec(naked) void wheelIndexBlockAddFunc()
+	{
+		//ECX - locked index buffer
+		__asm mov wheelIndexBuffer, ECX
+
+		__asm add ECX, wheelIndexBlockOffset //original instruction, offset read from it
+
+		__asm jmp wheelIndexBlockAddJumpBack //jump back into regular flow
+	}
+
+	__declspec(naked) void wheelVertexUnlockFunc()
+	{
+		//ESI - vertex buffer, the index buffer is still locked
+		__asm pushad
+		__asm pushfd
+
+		hideMeshCarWheels();
+
+		__asm popfd
+		__asm popad
+
+		//original instructions
+		__asm mov EAX, dword ptr[ESI]
+		__asm push ESI
+		__asm call dword ptr[EAX + 0x30]
+
+		__asm jmp wheelVertexUnlockJumpBack //jump back into regular flow
+	}
+
 	void __cdecl renderCarSteeringWheelsFunc(BYTE* device, DWORD param)
 	{
-		// Draw the 3D wheels first, the flat wheel of those cars is hidden for the original call
+		// Draw the 3D wheels first, the flat wheel of those cars is hidden for the original call (only the wheel with the gloves patch)
 		int numMeshCars = useCockpitMesh ? drawCockpitMeshWheels(device, (int)param) : 0;
+
+		// With the gloves patch the original call draws those cars too, then only their wheel gets collapsed
+		numFrameMeshCars = numMeshCars;
+		frameSkipCar = (int)param;
+		wheelIndexBuffer = NULL;
 
 		int numChanged = 0;
 
@@ -2004,7 +2190,11 @@ namespace SteeringWheels
 			oldWheelVisible[numMeshCars] = field<BYTE>(car, CAR_WHEEL_VISIBLE);
 			numMeshCars++;
 
-			field<BYTE>(car, CAR_WHEEL_VISIBLE) = 0;
+			// Without the gloves patch GP4 skips the car, gloves and arms included
+			if (!glovesPatched)
+			{
+				field<BYTE>(car, CAR_WHEEL_VISIBLE) = 0;
+			}
 		}
 
 		if (numMeshCars > 0)
@@ -2166,6 +2356,25 @@ namespace SteeringWheels
 				if (useCockpitMesh)
 				{
 					readDynamicDataCount();
+
+					// GP4's gloves and arms on the 3D wheels, without it those cars skip the flat renderer
+					if (readWheelBlockCount())
+					{
+						BYTE indexBlockAddPatch[] = { 0xe9, 0x00, 0x00, 0x00, 0x00, 0x90 };
+						BYTE vertexUnlockPatch[] = { 0xe9, 0x00, 0x00, 0x00, 0x00, 0x90 };
+						DWORD indexBlockAddOffset = PtrToUlong(wheelIndexBlockAddFunc) - wheelIndexBlockAdd - 5;
+						DWORD vertexUnlockOffset = PtrToUlong(wheelVertexUnlockFunc) - wheelVertexUnlock - 5;
+
+						memcpy(&indexBlockAddPatch[1], &indexBlockAddOffset, sizeof(DWORD));
+						memcpy(&vertexUnlockPatch[1], &vertexUnlockOffset, sizeof(DWORD));
+
+						MemUtils::patchAddress((LPVOID)wheelIndexBlockAdd, indexBlockAddPatch, sizeof(indexBlockAddPatch));
+						MemUtils::patchAddress((LPVOID)wheelVertexUnlock, vertexUnlockPatch, sizeof(vertexUnlockPatch));
+
+						glovesPatched = true;
+					}
+
+					OutputGP4PPDebugString("Steering Wheels: gloves and arms on the 3D external steering wheels : " + string(glovesPatched ? "Applied" : "Not applied"));
 				}
 
 				externalPatched = true;

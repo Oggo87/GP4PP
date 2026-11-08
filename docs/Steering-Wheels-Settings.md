@@ -65,7 +65,9 @@ When enabled, the external steering wheels are drawn in 3D with the cockpit stee
 
 These work the same way they do in the cockpit view. As in the cockpit view, the off state objects of the aids, rev lights, flags, pit and opposition spread displays are never shown. Only objects that are part of the steering wheel mesh are shown, so for example a gear display that is part of the dash mesh is not. The log lists how many objects of each display a steering wheel mesh has. Other displays (suggested gear, aids, LEDs, opposition spread), mirrors and the LCD are not shown.
 
-When `UseCockpitMesh` is enabled, every [CockpitSteeringWheels](#CockpitSteeringWheels) setting applies to both the cockpit and the external steering wheels: each car's external steering wheel is the same mesh it has in the cockpit view, per team or per car when enabled (`PerTeam`, `PerDriver`, `AutoName`, `FileName`), the default `cockpit_wheel.gp4` otherwise. `PerTeam`, `PerDriver`, `AutoName` and `FileName` of this section only choose the flat external steering wheel textures, which have no effect while `UseCockpitMesh` is enabled, as all cars use the 3D steering wheel.
+GP4's own flat gloves and arms are still drawn on the 3D external steering wheels, in the same place and with the same team arm colours as on the flat steering wheel; only the flat steering wheel and its rev lights are left out.
+
+When `UseCockpitMesh` is enabled, every [CockpitSteeringWheels](#CockpitSteeringWheels) setting applies to both the cockpit and the external steering wheels: each car's external steering wheel is the same mesh it has in the cockpit view, per team or per car when enabled (`PerTeam`, `PerDriver`, `AutoName`, `FileName`), the default `cockpit_wheel.gp4` otherwise. `PerTeam`, `PerDriver`, `AutoName` and `FileName` of this section only choose the flat external steering wheel textures; while `UseCockpitMesh` is enabled all cars use the 3D steering wheel, so those textures are only used for the gloves and arms.
 
 ### CockpitMeshScale
 
