@@ -1,12 +1,13 @@
 # General Settings
 
-This section contains four entries:
+This section contains six entries:
 
 * [Disable CD Check](#Disable-CD-Check)
 * [Fix 3D Wheels](#Fix-3D-Wheels)
 * [Track Folders](#Track-Folders)
 * [Cockpit Visor](#Cockpit-Visor)
 * [Steering Wheel Advanced Car Sahder](#Steering-Wheel-Advanced-Car-Shader)
+* [Show Opponents Fuel Laps](#Show-Opponents-Fuel-Laps)
 
 ```ini
 [Settings]
@@ -16,6 +17,7 @@ Fix3DWheelsCockpitView = false
 TrackFolders = false
 CockpitVisor = false
 StWheelAdvancedCarShader = false
+ShowOpponentsFuelLaps = false
 ```
 
 ## Disable CD Check
@@ -79,3 +81,9 @@ Transparency = 0.5
 This setting allows to enable using GP4's built-in advanced car shader (the same one used for cars and helmets) for the in-cockpit steering wheel mesh, improving its appearance with better reflections and lighting effects.
 
 Advanced Car Shader does not support alpha-blending, so if the steering wheel mesh uses any alpha-blending textures (for example, for cutouts or holes in the mesh), those parts will appear fully opaque when this setting is enabled. It is intended to be used with full 3D steering wheel meshes that do not rely on alpha-blending.
+
+## Show Opponents Fuel Laps
+
+In a race, GP4 only shows the fuel laps of the player's car: when viewing another car's cockpit, its fuel laps are shown as `--.-`. When this setting is enabled, every car shows its own fuel laps, on the dash and steering wheel digits as well as on the LCD. Outside a race GP4 already shows every car's fuel laps, so nothing changes there.
+
+It also applies to the 3D external steering wheels (see [UseCockpitMesh](Steering-Wheels-Settings.md#UseCockpitMesh)), which otherwise show `--.-` for every car but the player's, as GP4's own dash does.

@@ -15,6 +15,8 @@ PerTeam = false
 PerDriver = false
 AutoName = true
 FileName = 
+UseCockpitMesh = false
+CockpitMeshScale = 0.7
 
 [CockpitSteeringWheels]
 PerTeam = false
@@ -43,6 +45,31 @@ Every car is handled individually: the file name decides whether two cars share 
 Per-team or per-car textures for the external steering wheels, i.e. the steering wheels seen on the cars from any external camera, TV camera or replay.
 
 The textures are loaded together with GP4's own `stwheel.tex`, from the same `cars` folder. Only the texture changes: all cars share GP4's external steering wheel geometry.
+
+### UseCockpitMesh
+
+When enabled, the external steering wheels are drawn in 3D with the cockpit steering wheel mesh, instead of GP4's flat textured steering wheel. Only the objects the cockpit view shows when nothing is lit are always shown: `steering_wheel`, `Warning_off`, `LED01_off` to `LED05_off` and the `Water_T_on`, `Fuel_F_on` and `Lap_L_on` labels, together with each car's own:
+
+* rev lights (`Left_REV1_on` to `Left_REV5_on` and `Right_REV1_on` to `Right_REV5_on`)
+* flag lights (`Left_flag1_on` to `Left_flag3_on` and `Right_flag1_on` to `Right_flag3_on`), for yellow and blue flags, failures and warnings
+* gear (`Gear_R`, `Gear_N`, `Gear_1` to `Gear_7`)
+* water temperature (`Water_A_1`, `Water_B_0` to `Water_B_9`, `Water_C_0` to `Water_C_9`)
+* fuel laps (`Fuel_remaining_point_on`, `Fuel_A_*`, `Fuel_B_*`, `Fuel_C_*`). As on GP4's own dash, in a race only the player's car shows its fuel; every other car shows `--.-` (`Fuel_F_minus`, `Fuel_A_minus`, `Fuel_B_minus`, `Fuel_C_minus`), unless [Show Opponents Fuel Laps](General-Settings.md#Show-Opponents-Fuel-Laps) is enabled
+* position (`Position_P_on`, `Position_A_*`, `Position_B_*`): race position, or best lap order in the other sessions
+* lap (`Lap_A_*`, `Lap_B_*`)
+* lap time (`lap_time_colon_on`, `lap_time_point_on`, `Lap_Time_A_*` to `Lap_Time_F_*`): the running lap time in whole seconds, then for about 6 seconds after crossing a timing line the lap time, or outside a race the split time, to the millisecond. As on GP4's own dash, the time is held longer while a warning or failure message is shown on the car's LCD, and is `-:--.---` until the car starts a lap
+* speed (`Speed_A_0` to `Speed_A_3`, `Speed_B_*`, `Speed_C_*`), in the units chosen in GP4
+* driver status (`Driver_Status_off`, `Driver_Status_red` on the player's car)
+* warning lights (`Warning_left_front_tyre_1` and the other tyre, wing and plank warnings)
+* pit lights (`Pit_1` for the car's own pit light, `Pit_2` for its team-mate's in a race)
+
+These work the same way they do in the cockpit view. As in the cockpit view, the off state objects of the aids, rev lights, flags, pit and opposition spread displays are never shown. Only objects that are part of the steering wheel mesh are shown, so for example a gear display that is part of the dash mesh is not. The log lists how many objects of each display a steering wheel mesh has. Other displays (suggested gear, aids, LEDs, opposition spread), mirrors and the LCD are not shown.
+
+When `UseCockpitMesh` is enabled, every [CockpitSteeringWheels](#CockpitSteeringWheels) setting applies to both the cockpit and the external steering wheels: each car's external steering wheel is the same mesh it has in the cockpit view, per team or per car when enabled (`PerTeam`, `PerDriver`, `AutoName`, `FileName`), the default `cockpit_wheel.gp4` otherwise. `PerTeam`, `PerDriver`, `AutoName` and `FileName` of this section only choose the flat external steering wheel textures, which have no effect while `UseCockpitMesh` is enabled, as all cars use the 3D steering wheel.
+
+### CockpitMeshScale
+
+Scale of the 3D external steering wheels, applied to the whole mesh around its rotation point. The cockpit steering wheel mesh is larger than GP4's flat steering wheel, and `0.7` matches it closely. Values of 0 or less are ignored and `0.7` is used instead. Only used when `UseCockpitMesh` is enabled.
 
 ## CockpitSteeringWheels
 
