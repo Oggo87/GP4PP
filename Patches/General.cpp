@@ -12,9 +12,20 @@ namespace General
 	bool fix3DWheelsTreadMapping = false;
 	bool fix3DWheelsCockpitView = false;
 	bool stWheelAdvancedCarShader = false;
+	bool fixProjectedShadows = false;
 
 	//Target Addresses
 	DWORD wheelShaderSetMatrixStartAddress = 0x00488661;
+
+	//Projected shadows: the shadow map covers +-3.45 around the car origin (RenderProjectedShadowMap) and its decal +-3.5
+	//(BuildCarShadowDecals), so the shadow of a longer car is cut off at the map edge. Fix: coverage 6.9 and the two projected
+	//decal size reads (mov edx, [g_carShadowDecalSize]) repointed to g_float7 (0x005f06d8, 7.0); the static read at 0x00491a62 keeps 3.5
+	DWORD shadowDecalSizeOperands[] = { 0x0049199b, 0x00491a0c };	//projected + blur, projected unblurred
+	BYTE shadowDecalSizeOldBytes[] = { 0xb8, 0x50, 0x64, 0x00 };	//g_carShadowDecalSize (0x006450b8)
+	BYTE shadowDecalSizeNewBytes[] = { 0xd8, 0x06, 0x5f, 0x00 };	//g_float7 (0x005f06d8)
+	DWORD shadowMapCoverage = 0x005f09d4;
+	BYTE shadowMapCoverageOldBytes[] = { 0xcc, 0xcc, 0x5c, 0x40 };	//3.45
+	BYTE shadowMapCoverageNewBytes[] = { 0xcd, 0xcc, 0xdc, 0x40 };	//6.9
 
 	//Jump Back Addresses
 	DWORD wheelShaderSetMatrixJumpBackAddress = 0x00488668;
@@ -142,6 +153,15 @@ namespace General
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Advanced Car Shader for Cockpit Steering Wheel : " + string(stWheelAdvancedCarShader ? "Enabled" : "Disabled"));
+
+		// Fix projected shadows of long cars
+		try
+		{
+			fixProjectedShadows = iniSettings["Settings"]["FixProjectedShadows"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Fix Projected Shadows : " + string(fixProjectedShadows ? "Enabled" : "Disabled"));
 	}
 
 	void ApplyPatches()
@@ -179,6 +199,34 @@ namespace General
 			DWORD carShaderPatchAddress = 0x0046faf3;
 			BYTE carShaderPatch = { 0x12 };
 			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
+		}
+
+		// Apply Fix Projected Shadows Patch
+		if (fixProjectedShadows)
+		{
+			//All three locations or none
+			bool bytesMatch = memcmp(MemUtils::addressToPtr<BYTE>(shadowMapCoverage), shadowMapCoverageOldBytes, sizeof(shadowMapCoverageOldBytes)) == 0;
+
+			for (DWORD operand : shadowDecalSizeOperands)
+			{
+				bytesMatch = bytesMatch && memcmp(MemUtils::addressToPtr<BYTE>(operand), shadowDecalSizeOldBytes, sizeof(shadowDecalSizeOldBytes)) == 0;
+			}
+
+			if (bytesMatch)
+			{
+				for (DWORD operand : shadowDecalSizeOperands)
+				{
+					GP4MemLib::MemUtils::patchAddress((LPVOID)operand, shadowDecalSizeNewBytes, sizeof(shadowDecalSizeNewBytes));
+				}
+
+				GP4MemLib::MemUtils::patchAddress((LPVOID)shadowMapCoverage, shadowMapCoverageNewBytes, sizeof(shadowMapCoverageNewBytes));
+
+				OutputGP4PPDebugString("Fix Projected Shadows patch : Applied");
+			}
+			else
+			{
+				OutputGP4PPDebugString("Fix Projected Shadows : unexpected bytes in BuildCarShadowDecals or at the shadow map coverage, patch not applied");
+			}
 		}
 	};
 };

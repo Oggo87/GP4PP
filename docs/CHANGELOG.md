@@ -1,5 +1,7 @@
 # Version History
 
+* Unreleased
+    * Added option to fix the projected shadows of cars significantly longer or larger than the original ones, which were cut off at the edge of the shadow map. See [General Settings](General-Settings.md#Fix-Projected-Shadows) for more details
 * 2.2.2
     * Added support for forcing the z-buffer format used by D3D directly from within GP4
 * 2.2.1
