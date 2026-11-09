@@ -1,5 +1,6 @@
 #include "General.h"
 #include "../Utils/Helpers.h"
+#include "../Utils/D3DTypes.h"
 #include "../GP4MemLib/GP4MemLib.h"
 
 using namespace GP4MemLib;
@@ -12,9 +13,22 @@ namespace General
 	bool fix3DWheelsTreadMapping = false;
 	bool fix3DWheelsCockpitView = false;
 	bool stWheelAdvancedCarShader = false;
+	bool showOpponentsFuelLaps = false;
+	bool opponentsFuelLapsPatched = false;
+	bool fixProjectedShadows = false;
 
 	//Target Addresses
 	DWORD wheelShaderSetMatrixStartAddress = 0x00488661;
+
+	//Projected shadows: the shadow map covers +-3.45 around the car origin (RenderProjectedShadowMap) and its decal +-3.5
+	//(BuildCarShadowDecals), so the shadow of a longer car is cut off at the map edge. Fix: coverage 6.9 and the two projected
+	//decal size reads (mov edx, [g_carShadowDecalSize]) repointed to g_float7 (0x005f06d8, 7.0); the static read at 0x00491a62 keeps 3.5
+	DWORD shadowDecalSizeOperands[] = { 0x0049199b, 0x00491a0c };	//projected + blur, projected unblurred
+	BYTE shadowDecalSizeOldBytes[] = { 0xb8, 0x50, 0x64, 0x00 };	//g_carShadowDecalSize (0x006450b8)
+	BYTE shadowDecalSizeNewBytes[] = { 0xd8, 0x06, 0x5f, 0x00 };	//g_float7 (0x005f06d8)
+	DWORD shadowMapCoverage = 0x005f09d4;
+	BYTE shadowMapCoverageOldBytes[] = { 0xcc, 0xcc, 0x5c, 0x40 };	//3.45
+	BYTE shadowMapCoverageNewBytes[] = { 0xcd, 0xcc, 0xdc, 0x40 };	//6.9
 
 	//Jump Back Addresses
 	DWORD wheelShaderSetMatrixJumpBackAddress = 0x00488668;
@@ -26,8 +40,12 @@ namespace General
 
 	DWORD ptrCockpitWheels = 0x00a4d684;
 
+	//LcdWriteFuel: jnz to the fuel display when not in a race, falling through to the opponents' "--.-" checks
+	DWORD opponentsFuelLapsJump = 0x0051518e;
+	BYTE opponentsFuelLapsJumpBytes[] = { 0x0f, 0x85, 0xa9, 0x00, 0x00, 0x00 };
+
 	//Tyre Tread Variables
-	float(*d3dMatrix_0xc0)[4][4], (*d3dMatrix_0xbc)[4][4], (*d3dMatrix_0xb8)[4][4];
+	D3DMATRIX *d3dMatrix_0xc0, *d3dMatrix_0xbc, *d3dMatrix_0xb8;
 
 	DWORD ptrMeshContainer = 0x0;
 	int collisionMeshIndex = 0;
@@ -35,20 +53,7 @@ namespace General
 	void initD3DMatrixVariables()
 	{
 		//set matrices
-		for (int i = 0; i < 4; i++)
-		{
-			for (int j = 0; j < 4; j++)
-			{
-				if (i == j)
-				{
-					(*d3dMatrix_0xc0)[i][j] = (*d3dMatrix_0xbc)[i][j] = (*d3dMatrix_0xb8)[i][j] = 1;
-				}
-				else
-				{
-					(*d3dMatrix_0xc0)[i][j] = (*d3dMatrix_0xbc)[i][j] = (*d3dMatrix_0xb8)[i][j] = 0;
-				}
-			}
-		}
+		*d3dMatrix_0xc0 = *d3dMatrix_0xbc = *d3dMatrix_0xb8 = matrixIdentity();
 	}
 
 	void setD3DMatrix()
@@ -59,14 +64,14 @@ namespace General
 		if (((fix3DWheelsTreadMapping && !isCockpitMesh) || (fix3DWheelsCockpitView && isCockpitMesh))
 			&& (collisionMeshIndex == 0x12 || collisionMeshIndex == 0x16))
 		{
-			(*d3dMatrix_0xc0)[1][1] = -1;
+			d3dMatrix_0xc0->m[1][1] = -1;
 		}
 
 		//rotate the tyre tread texture when in cockpit view
 		if (fix3DWheelsCockpitView && isCockpitMesh)
 		{
-			(*d3dMatrix_0xc0)[0][0] = -1;
-			(*d3dMatrix_0xc0)[1][1] = -(*d3dMatrix_0xc0)[1][1];
+			d3dMatrix_0xc0->m[0][0] = -1;
+			d3dMatrix_0xc0->m[1][1] = -d3dMatrix_0xc0->m[1][1];
 		}
 	}
 
@@ -142,6 +147,29 @@ namespace General
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("Advanced Car Shader for Cockpit Steering Wheel : " + string(stWheelAdvancedCarShader ? "Enabled" : "Disabled"));
+  
+		// Show the opponents' fuel laps in a race
+		try
+		{
+			showOpponentsFuelLaps = iniSettings["Settings"]["ShowOpponentsFuelLaps"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Show Opponents Fuel Laps : " + string(showOpponentsFuelLaps ? "Enabled" : "Disabled"));
+    
+		// Fix projected shadows of long cars
+		try
+		{
+			fixProjectedShadows = iniSettings["Settings"]["FixProjectedShadows"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Fix Projected Shadows : " + string(fixProjectedShadows ? "Enabled" : "Disabled"));
+	}
+
+	bool IsOpponentsFuelLapsPatched()
+	{
+		return opponentsFuelLapsPatched;
 	}
 
 	void ApplyPatches()
@@ -161,15 +189,43 @@ namespace General
 			MemUtils::rerouteFunction(wheelShaderSetMatrixStartAddress, PtrToUlong(wheelShaderSetMatrixFunc), VAR_NAME(wheelShaderSetMatrixFunc));
 
 			//Assign matrix pointers to addresses in GP4 memory
-			d3dMatrix_0xb8 = GP4MemLib::MemUtils::addressToPtr<float[4][4]>(d3dMatrixAddr_0xb8);
-			d3dMatrix_0xbc = GP4MemLib::MemUtils::addressToPtr<float[4][4]>(d3dMatrixAddr_0xbc);
-			d3dMatrix_0xc0 = GP4MemLib::MemUtils::addressToPtr<float[4][4]>(d3dMatrixAddr_0xc0);
+			d3dMatrix_0xb8 = GP4MemLib::MemUtils::addressToPtr<D3DMATRIX>(d3dMatrixAddr_0xb8);
+			d3dMatrix_0xbc = GP4MemLib::MemUtils::addressToPtr<D3DMATRIX>(d3dMatrixAddr_0xbc);
+			d3dMatrix_0xc0 = GP4MemLib::MemUtils::addressToPtr<D3DMATRIX>(d3dMatrixAddr_0xc0);
 
 			//Patch CGP4WheelShader
 			//Skip the check for "Rotate wheels via textures" (CGP4WheelShader + 0xb4) by setting the comparison result always to TRUE (AL = 1)
 			DWORD shaderPatchAddress = 0x0046a2a8;
 			BYTE shaderPatch[] = { 0xb0, 0x01, 0x90, 0x90, 0x90, 0x90 }; //mov al, 1 - nop - nop - nop - nop - nop
 			GP4MemLib::MemUtils::patchAddress((LPVOID)shaderPatchAddress, shaderPatch, sizeof(shaderPatch));
+		}
+
+		// Apply Fix Projected Shadows Patch
+		if (fixProjectedShadows)
+		{
+			//All three locations or none
+			bool bytesMatch = memcmp(MemUtils::addressToPtr<BYTE>(shadowMapCoverage), shadowMapCoverageOldBytes, sizeof(shadowMapCoverageOldBytes)) == 0;
+
+			for (DWORD operand : shadowDecalSizeOperands)
+			{
+				bytesMatch = bytesMatch && memcmp(MemUtils::addressToPtr<BYTE>(operand), shadowDecalSizeOldBytes, sizeof(shadowDecalSizeOldBytes)) == 0;
+			}
+
+			if (bytesMatch)
+			{
+				for (DWORD operand : shadowDecalSizeOperands)
+				{
+					GP4MemLib::MemUtils::patchAddress((LPVOID)operand, shadowDecalSizeNewBytes, sizeof(shadowDecalSizeNewBytes));
+				}
+
+				GP4MemLib::MemUtils::patchAddress((LPVOID)shadowMapCoverage, shadowMapCoverageNewBytes, sizeof(shadowMapCoverageNewBytes));
+
+				OutputGP4PPDebugString("Fix Projected Shadows patch : Applied");
+			}
+			else
+			{
+				OutputGP4PPDebugString("Fix Projected Shadows : unexpected bytes in BuildCarShadowDecals or at the shadow map coverage, patch not applied");
+			}
 		}
 
 		// Apply Advanced Car Shader for in-cockpit steering wheel Patch
@@ -179,6 +235,26 @@ namespace General
 			DWORD carShaderPatchAddress = 0x0046faf3;
 			BYTE carShaderPatch = { 0x12 };
 			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
+		}
+
+		// Apply Show Opponents Fuel Laps Patch
+		if (showOpponentsFuelLaps)
+		{
+			//Patch the jnz to a jmp to the same target, so every car shows its fuel laps in a race too
+			if (memcmp(MemUtils::addressToPtr<BYTE>(opponentsFuelLapsJump), opponentsFuelLapsJumpBytes, sizeof(opponentsFuelLapsJumpBytes)) == 0)
+			{
+				BYTE fuelLapsPatch[] = { 0xe9, 0xaa, 0x00, 0x00, 0x00, 0x90 }; //jmp 0x0051523d - nop
+				GP4MemLib::MemUtils::patchAddress((LPVOID)opponentsFuelLapsJump, fuelLapsPatch, sizeof(fuelLapsPatch));
+
+				opponentsFuelLapsPatched = true;
+			}
+			else
+			{
+				OutputGP4PPDebugString("Show Opponents Fuel Laps : unexpected bytes at " + MemUtils::dwordToString(opponentsFuelLapsJump) + " (LcdWriteFuel), opponents' fuel laps stay hidden");
+			}
+
+
+			OutputGP4PPDebugString("Show Opponents Fuel Laps patch : " + string(opponentsFuelLapsPatched ? "Applied" : "Not applied"));
 		}
 	};
 };

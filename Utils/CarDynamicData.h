@@ -38,8 +38,8 @@ namespace GP4PP
 
          /* 0x03C */ int32_t  steer; // after Steering Help
 
-         /* 0x040 */ uint32_t invisibleBits; // enum Car Parts?
-         /* 0x044 */ uint32_t prevInvisibleBits; // enum Car Parts?
+         /* 0x040 */ CarPartsFlags missingCarParts;
+         /* 0x044 */ uint32_t prevMissingCarParts; // CarPartsFlags?
          /* 0x048 */ uint32_t field_0x048; // related to impact of damage 
          /* 0x04C */ uint32_t timerLeds;
          /* 0x050 */ uint32_t timer_0x050;

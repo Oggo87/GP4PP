@@ -14,6 +14,34 @@ namespace GP4PP
 
 #pragma pack(push,1)
 
+    // offset 0x040 - CarDynamicData::missingCarParts
+    struct CarPartsFlags {
+        uint32_t unused : 1;             // bit 0 (1) - unused
+        uint32_t nose : 1;               // bit 1 (2) - nose
+        uint32_t rightFrontWing : 1;     // bit 2 (4) - right front wing
+        uint32_t rightFrontFin : 1;      // bit 3 (8) - right front fin
+        uint32_t leftFrontWing : 1;      // bit 4 (0x10) - left front wing
+        uint32_t leftFrontFin : 1;       // bit 5 (0x20) - left front fin
+        uint32_t frontRightSuspension : 1; // bit 6 (0x40) - front-right suspension
+        uint32_t frontRightWheel : 1;    // bit 7 (0x80) - front-right wheel
+        uint32_t frontLeftSuspension : 1; // bit 8 (0x100) - front-left suspension
+        uint32_t frontLeftWheel : 1;     // bit 9 (0x200) - front-left wheel
+        uint32_t rightSidepod : 1;       // bit 10 (0x400) - right sidepod
+        uint32_t leftSidepod : 1;        // bit 11 (0x800) - left sidepod
+        uint32_t engine : 1;             // bit 12 (0x1000) - engine
+        uint32_t rearRightSuspension : 1; // bit 13 (0x2000) - rear-right suspension
+        uint32_t rearRightWheel : 1;     // bit 14 (0x4000) - rear-right wheel
+        uint32_t rearLeftSuspension : 1; // bit 15 (0x8000) - rear-left suspension
+        uint32_t rearLeftWheel : 1;      // bit 16 (0x10000) - rear-left wheel
+        uint32_t lowerRearWing : 1;      // bit 17 (0x20000) - lower rear wing
+        uint32_t rightRearFin : 1;       // bit 18 (0x40000) - right rear fin
+        uint32_t leftRearFin : 1;        // bit 19 (0x80000) - left rear fin
+        uint32_t upperRearWing : 1;      // bit 20 (0x100000) - upper rear wing
+        uint32_t rightBargeBoard : 1;    // bit 21 (0x200000) - right barge board
+        uint32_t leftBargeBoard : 1;     // bit 22 (0x400000) - left barge board
+        uint32_t reserved23 : 9;         // bits 23-31
+    };
+
     // offset 0x06F - CarDynamicData::digitalControl
     struct CarDigitalControlFlags {
         uint8_t throttle : 1; // bit 0 (1)  - throttle pressed
