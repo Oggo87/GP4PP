@@ -1,5 +1,6 @@
 #include "General.h"
 #include "../Utils/Helpers.h"
+#include "../Utils/D3DTypes.h"
 #include "../GP4MemLib/GP4MemLib.h"
 
 using namespace GP4MemLib;
@@ -44,7 +45,7 @@ namespace General
 	BYTE opponentsFuelLapsJumpBytes[] = { 0x0f, 0x85, 0xa9, 0x00, 0x00, 0x00 };
 
 	//Tyre Tread Variables
-	float(*d3dMatrix_0xc0)[4][4], (*d3dMatrix_0xbc)[4][4], (*d3dMatrix_0xb8)[4][4];
+	D3DMATRIX *d3dMatrix_0xc0, *d3dMatrix_0xbc, *d3dMatrix_0xb8;
 
 	DWORD ptrMeshContainer = 0x0;
 	int collisionMeshIndex = 0;
@@ -52,20 +53,7 @@ namespace General
 	void initD3DMatrixVariables()
 	{
 		//set matrices
-		for (int i = 0; i < 4; i++)
-		{
-			for (int j = 0; j < 4; j++)
-			{
-				if (i == j)
-				{
-					(*d3dMatrix_0xc0)[i][j] = (*d3dMatrix_0xbc)[i][j] = (*d3dMatrix_0xb8)[i][j] = 1;
-				}
-				else
-				{
-					(*d3dMatrix_0xc0)[i][j] = (*d3dMatrix_0xbc)[i][j] = (*d3dMatrix_0xb8)[i][j] = 0;
-				}
-			}
-		}
+		*d3dMatrix_0xc0 = *d3dMatrix_0xbc = *d3dMatrix_0xb8 = matrixIdentity();
 	}
 
 	void setD3DMatrix()
@@ -76,14 +64,14 @@ namespace General
 		if (((fix3DWheelsTreadMapping && !isCockpitMesh) || (fix3DWheelsCockpitView && isCockpitMesh))
 			&& (collisionMeshIndex == 0x12 || collisionMeshIndex == 0x16))
 		{
-			(*d3dMatrix_0xc0)[1][1] = -1;
+			d3dMatrix_0xc0->m[1][1] = -1;
 		}
 
 		//rotate the tyre tread texture when in cockpit view
 		if (fix3DWheelsCockpitView && isCockpitMesh)
 		{
-			(*d3dMatrix_0xc0)[0][0] = -1;
-			(*d3dMatrix_0xc0)[1][1] = -(*d3dMatrix_0xc0)[1][1];
+			d3dMatrix_0xc0->m[0][0] = -1;
+			d3dMatrix_0xc0->m[1][1] = -d3dMatrix_0xc0->m[1][1];
 		}
 	}
 
@@ -201,9 +189,9 @@ namespace General
 			MemUtils::rerouteFunction(wheelShaderSetMatrixStartAddress, PtrToUlong(wheelShaderSetMatrixFunc), VAR_NAME(wheelShaderSetMatrixFunc));
 
 			//Assign matrix pointers to addresses in GP4 memory
-			d3dMatrix_0xb8 = GP4MemLib::MemUtils::addressToPtr<float[4][4]>(d3dMatrixAddr_0xb8);
-			d3dMatrix_0xbc = GP4MemLib::MemUtils::addressToPtr<float[4][4]>(d3dMatrixAddr_0xbc);
-			d3dMatrix_0xc0 = GP4MemLib::MemUtils::addressToPtr<float[4][4]>(d3dMatrixAddr_0xc0);
+			d3dMatrix_0xb8 = GP4MemLib::MemUtils::addressToPtr<D3DMATRIX>(d3dMatrixAddr_0xb8);
+			d3dMatrix_0xbc = GP4MemLib::MemUtils::addressToPtr<D3DMATRIX>(d3dMatrixAddr_0xbc);
+			d3dMatrix_0xc0 = GP4MemLib::MemUtils::addressToPtr<D3DMATRIX>(d3dMatrixAddr_0xc0);
 
 			//Patch CGP4WheelShader
 			//Skip the check for "Rotate wheels via textures" (CGP4WheelShader + 0xb4) by setting the comparison result always to TRUE (AL = 1)

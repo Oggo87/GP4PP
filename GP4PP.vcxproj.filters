@@ -113,6 +113,9 @@
     <ClInclude Include="Utils\BGRA.h">
       <Filter>Utils</Filter>
     </ClInclude>
+    <ClInclude Include="Utils\D3DTypes.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
     <ClInclude Include="Utils\CGP4Glass.h">
       <Filter>Utils</Filter>
     </ClInclude>

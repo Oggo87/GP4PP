@@ -1,6 +1,7 @@
 #include "D3D.h"
 #include "../GP4MemLib/GP4MemLib.h"
 #include "../Utils/Helpers.h"
+#include "../Utils/D3DTypes.h"
 
 using namespace GP4MemLib;
 using namespace GP4PP;

@@ -1,6 +1,7 @@
 #include "SteeringWheels.h"
 #include "General.h"
 #include "../Utils/Helpers.h"
+#include "../Utils/D3DTypes.h"
 #include "../GP4MemLib/GP4MemLib.h"
 #include "../IniLib/IniLib.h"
 #include <algorithm>
@@ -187,11 +188,10 @@ namespace SteeringWheels
 	typedef void(__thiscall* ApplyShaderToObjectType)(BYTE*, BYTE*, int, int);
 	typedef BYTE* (__cdecl* GetShaderType)(int);
 	typedef int(__stdcall* AssetFileExistsType)(char*, int);
-	typedef void(__thiscall* MeshSetTransformType)(BYTE*, float*, int);
+	typedef void(__thiscall* MeshSetTransformType)(BYTE*, const D3DMATRIX*, int);
 	typedef void(__thiscall* MeshUpdateTransformsType)(BYTE*, int, char);
 	typedef void(__thiscall* CockpitSetMeshTransformsType)(BYTE*, BYTE*, BYTE*);
 	typedef void(__thiscall* MeshDrawType)(BYTE*, int, void*, char);
-	typedef long(__stdcall* D3DSetTransformType)(void*, DWORD, float*);
 	typedef int(__thiscall* DeviceGetRenderStateType)(BYTE*, DWORD, DWORD*);
 	typedef int(__thiscall* DeviceQueueRenderStateType)(BYTE*, DWORD, DWORD);
 
@@ -284,9 +284,6 @@ namespace SteeringWheels
 	const DWORD DEVICE_D3D_DEVICE = 0x08;
 	const DWORD DEVICE_WORLD_MATRIX = 0x2018;
 	const DWORD DEVICE_CURRENT_SHADER = 0x24a0;
-	const DWORD D3D_SET_TRANSFORM = 0x94;		// IDirect3DDevice8::SetTransform vtable offset
-	const DWORD D3DTS_WORLD = 0x100;
-	const DWORD D3DRS_NORMALIZENORMALS = 0x8f;
 	const DWORD DEVICE_STAGE0_TEXTURE = 0x1f7c;
 	const DWORD DEVICE_STAGE1_TEXTURE = 0x1f80;
 	const DWORD DEVICE_STAGE0_DIRTY = 0x1f9c;
@@ -441,12 +438,6 @@ namespace SteeringWheels
 		int flagOn[2][NUM_FLAG_LIGHTS];		// left, right
 		int gears[NUM_GEARS];
 		vector<pair<int, int>> displays;		// cockpit slot and mesh object of each per-car display object found
-	};
-
-	// Row-major 4x4 matrix, same layout as D3DMATRIX
-	struct Matrix
-	{
-		float m[4][4];
 	};
 
 	// External wheels storage variables
@@ -1518,76 +1509,6 @@ namespace SteeringWheels
 	// 3D external steering wheels
 	//
 
-	Matrix multiply(const Matrix& a, const Matrix& b)
-	{
-		Matrix result;
-
-		for (int row = 0; row < 4; row++)
-		{
-			for (int column = 0; column < 4; column++)
-			{
-				result.m[row][column] = a.m[row][0] * b.m[0][column] + a.m[row][1] * b.m[1][column] + a.m[row][2] * b.m[2][column] + a.m[row][3] * b.m[3][column];
-			}
-		}
-
-		return result;
-	}
-
-	Matrix identity()
-	{
-		Matrix result = {};
-
-		result.m[0][0] = result.m[1][1] = result.m[2][2] = result.m[3][3] = 1.0f;
-
-		return result;
-	}
-
-	Matrix translation(float x, float y, float z)
-	{
-		Matrix result = identity();
-
-		result.m[3][0] = x;
-		result.m[3][1] = y;
-		result.m[3][2] = z;
-
-		return result;
-	}
-
-	Matrix scaling(float scale)
-	{
-		Matrix result = identity();
-
-		result.m[0][0] = result.m[1][1] = result.m[2][2] = scale;
-
-		return result;
-	}
-
-	Matrix rotationX(float angle)
-	{
-		// Same as D3DXMatrixRotationX
-		Matrix result = identity();
-
-		result.m[1][1] = cosf(angle);
-		result.m[1][2] = sinf(angle);
-		result.m[2][1] = -sinf(angle);
-		result.m[2][2] = cosf(angle);
-
-		return result;
-	}
-
-	Matrix rotationZ(float angle)
-	{
-		// Same as D3DXMatrixRotationZ
-		Matrix result = identity();
-
-		result.m[0][0] = cosf(angle);
-		result.m[0][1] = sinf(angle);
-		result.m[1][0] = -sinf(angle);
-		result.m[1][1] = cosf(angle);
-
-		return result;
-	}
-
 	float externalWheelAngle(BYTE* car)
 	{
 		// Same wrap and clamp the flat external wheel uses
@@ -1607,7 +1528,7 @@ namespace SteeringWheels
 		return max(-pi / 2.0f, min(pi / 2.0f, angle));
 	}
 
-	Matrix externalWheelMatrix(BYTE* car, int team)
+	D3DMATRIX externalWheelMatrix(BYTE* car, int team)
 	{
 		// The mesh origin is the rotation point: placed at the centre of the flat wheel, turned and tilted like in the cockpit
 		float offsetY = MemUtils::addressToValue<float>(stWheelTeamOffsets + team * 8);
@@ -1616,11 +1537,11 @@ namespace SteeringWheels
 		float wheelZ = MemUtils::addressToValue<float>(stWheelZ);
 		float tilt = MemUtils::addressToValue<float>(cockpitWheelTilt);
 
-		Matrix world = multiply(scaling(cockpitMeshScale), rotationZ(externalWheelAngle(car)));
-		world = multiply(world, rotationX(tilt));
-		world = multiply(world, translation(0.0f, offsetY + wheelY, offsetZ + wheelZ));
+		D3DMATRIX world = matrixMultiply(matrixScaling(cockpitMeshScale), matrixRotationZ(externalWheelAngle(car)));
+		world = matrixMultiply(world, matrixRotationX(tilt));
+		world = matrixMultiply(world, matrixTranslation(0.0f, offsetY + wheelY, offsetZ + wheelZ));
 
-		return multiply(world, field<Matrix>(car, CAR_MATRIX));
+		return matrixMultiply(world, field<D3DMATRIX>(car, CAR_MATRIX));
 	}
 
 	BYTE* externalWheelMesh(BYTE* cockpit, int carIndex)
@@ -2130,7 +2051,7 @@ namespace SteeringWheels
 		int numMeshCars = 0;
 		DWORD lightMap = field<DWORD>(shader, SHADER_LIGHT_MAP);
 		DWORD normalizeNormals = 0;
-		Matrix worldMatrix = field<Matrix>(device, DEVICE_WORLD_MATRIX);
+		D3DMATRIX worldMatrix = field<D3DMATRIX>(device, DEVICE_WORLD_MATRIX);
 		float maxDistance = MemUtils::addressToValue<float>(stWheelMaxDistance);
 		DWORD numEntries = field<DWORD>(lodManager, LOD_NUM_ENTRIES);
 		BYTE* entry = lodManager + LOD_ENTRIES;
@@ -2178,9 +2099,9 @@ namespace SteeringWheels
 			showDashObjects(mesh, wheelObjects, carIndex);
 			showDisplays(mesh, wheelObjects, carIndex);
 
-			Matrix world = externalWheelMatrix(car, team);
+			D3DMATRIX world = externalWheelMatrix(car, team);
 
-			MeshSetTransformFunc(mesh, &world.m[0][0], -1);
+			MeshSetTransformFunc(mesh, &world, -1);
 			MeshUpdateTransformsFunc(mesh, -1, 0);
 
 			MeshDrawType draw = *reinterpret_cast<MeshDrawType*>(field<BYTE*>(mesh, 0) + MESH_DRAW);
@@ -2218,12 +2139,12 @@ namespace SteeringWheels
 			// Same world transform restore the flat external wheels do
 			BYTE* d3dDevice = field<BYTE*>(device, DEVICE_D3D_DEVICE);
 
-			field<Matrix>(device, DEVICE_WORLD_MATRIX) = worldMatrix;
+			field<D3DMATRIX>(device, DEVICE_WORLD_MATRIX) = worldMatrix;
 
 			if (d3dDevice != NULL)
 			{
-				D3DSetTransformType setTransform = *reinterpret_cast<D3DSetTransformType*>(field<BYTE*>(d3dDevice, 0) + D3D_SET_TRANSFORM);
-				setTransform(d3dDevice, D3DTS_WORLD, &worldMatrix.m[0][0]);
+				D3DSetTransformType setTransform = *reinterpret_cast<D3DSetTransformType*>(field<BYTE*>(d3dDevice, 0) + D3DDEVICE8_SET_TRANSFORM);
+				setTransform(d3dDevice, D3DTS_WORLD, &worldMatrix);
 			}
 		}
 
