@@ -1,8 +1,8 @@
 # Version History
 
-* Unreleased
+* 2.3
     * Added option to fix the projected shadows of cars significantly longer or larger than the original ones, which were cut off at the edge of the shadow map. See [General Settings](General-Settings.md#Fix-Projected-Shadows) for more details
-    * Added support for per-team and per-car steering wheels, both the external steering wheel texture and the in-cockpit steering wheel mesh, as well as cockpit dashes. See [Steering Wheels Settings](Steering-Wheels-Settings.md) for more details. Concept and initinal reverse engineering from the ZaZ GP4 Tools proof of concept by [Ronald 'ZaZ' Plukker](https://github.com/RonaldZaZ)
+    * Added support for per-team and per-car steering wheels, both the external steering wheel texture and the in-cockpit steering wheel mesh, as well as cockpit dashes. See [Steering Wheels Settings](Steering-Wheels-Settings.md) for more details. Concept and initial reverse engineering from the ZaZ GP4 Tools proof of concept by [Ronald 'ZaZ' Plukker](https://github.com/RonaldZaZ)
     * Added option to draw the external steering wheels in 3D, using each car's cockpit steering wheel mesh. See [Steering Wheels Settings](Steering-Wheels-Settings.md#UseCockpitMesh) for more details. GP4's gloves and arms are kept on the 3D external steering wheels
     * Added option to show the fuel laps of every car in a race, in the cockpit and on the 3D external steering wheels. See [General Settings](General-Settings.md#Show-Opponents-Fuel-Laps) for more details
 

@@ -8,7 +8,7 @@
 ## Prerequisites
 
 * Grand Prix 4
-* Carset Manager (CSM) by ZaZ (recommended) or)
+* Carset Manager (CSM) by ZaZ (recommended) or
 * GP4 Memory Access by Carl_gpgames (recommended) or
 * CheatEngine or
 * Any other DLL injection tool
