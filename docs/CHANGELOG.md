@@ -1,5 +1,8 @@
 # Version History
 
+* 2.3.1
+    * Added GP4 Tweaker compatibility for the 3D external steering wheels: when GP4 Tweaker's `SteerPos` tweak is enabled, they use its per-car steering wheel positions. See [Steering Wheels Settings](Steering-Wheels-Settings.md#UseCockpitMesh) for more details
+
 * 2.3
     * Added option to fix the projected shadows of cars significantly longer or larger than the original ones, which were cut off at the edge of the shadow map. See [General Settings](General-Settings.md#Fix-Projected-Shadows) for more details
     * Added support for per-team and per-car steering wheels, both the external steering wheel texture and the in-cockpit steering wheel mesh, as well as cockpit dashes. See [Steering Wheels Settings](Steering-Wheels-Settings.md) for more details. Concept and initial reverse engineering from the ZaZ GP4 Tools proof of concept by [Ronald 'ZaZ' Plukker](https://github.com/RonaldZaZ)

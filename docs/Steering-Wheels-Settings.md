@@ -67,6 +67,8 @@ These work the same way they do in the cockpit view. As in the cockpit view, the
 
 GP4's own flat gloves and arms are still drawn on the 3D external steering wheels, in the same place and with the same team arm colours as on the flat steering wheel; only the flat steering wheel and its rev lights are left out.
 
+When GP4 Tweaker's `SteerPos` tweak is enabled, the 3D external steering wheels use the per-car position set in GP4 Tweaker, the same as the flat steering wheels.
+
 When `UseCockpitMesh` is enabled, every [CockpitSteeringWheels](#CockpitSteeringWheels) setting applies to both the cockpit and the external steering wheels: each car's external steering wheel is the same mesh it has in the cockpit view, per team or per car when enabled (`PerTeam`, `PerDriver`, `AutoName`, `FileName`), the default `cockpit_wheel.gp4` otherwise. `PerTeam`, `PerDriver`, `AutoName` and `FileName` of this section only choose the flat external steering wheel textures; while `UseCockpitMesh` is enabled all cars use the 3D steering wheel, so those textures are only used for the gloves and arms.
 
 ### CockpitMeshScale

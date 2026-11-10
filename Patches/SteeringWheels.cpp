@@ -2,6 +2,7 @@
 #include "General.h"
 #include "../Utils/Helpers.h"
 #include "../Utils/D3DTypes.h"
+#include "../Utils/Tweaker.h"
 #include "../GP4MemLib/GP4MemLib.h"
 #include "../IniLib/IniLib.h"
 #include <algorithm>
@@ -141,6 +142,7 @@ namespace SteeringWheels
 	DWORD bestLapOrder = 0x00675958;			// car ids by best lap, position outside a race
 	DWORD numBestLapOrder = 0x0066d8ec;			// dword
 	DWORD stWheelCarsDrawn = 0x00a4d6a0;		// dword, cars written to the external wheel buffers this frame
+	DWORD tweakerSteerPosTable = 0x4005df64;	// GP4Tweak.dll, x, y, z of the flat external wheel per driver, used by its SteerPos patch instead of the team offsets
 
 	// Function Addresses
 	DWORD InitCarSteeringWheels = 0x0048b2c0;
@@ -222,6 +224,7 @@ namespace SteeringWheels
 	DeviceQueueRenderStateType DeviceQueueRenderStateFunc = (DeviceQueueRenderStateType)DeviceQueueRenderState;
 
 	// Structure offsets
+	const DWORD CAR_DRIVER_INDEX = 0x1c;
 	const DWORD CAR_TEAM_INDEX = 0x20;
 	const DWORD CAR_TEAM_CAR = 0x24;			// 0 or 1, first or second car of the team
 	const DWORD CAR_WHEEL_TEXTURE = 0xd0;
@@ -279,6 +282,8 @@ namespace SteeringWheels
 	// Flat external wheel indices per car: 7 quads of 6 indices, wheel front, back, rev lights, gloves, arms
 	const int WHEEL_BLOCK_INDICES = 42;
 	const int WHEEL_ONLY_INDICES = 18;			// wheel front, back and rev lights, the gloves and arms follow
+
+	const int TWEAKER_STEER_POS_DRIVERS = 22;	// Tweaker caps the driver index (low 6 bits) at 21
 
 	const DWORD DEVICE_MANAGER = 0x04;
 	const DWORD DEVICE_D3D_DEVICE = 0x08;
@@ -460,6 +465,8 @@ namespace SteeringWheels
 	WORD* wheelIndexBuffer = NULL;		// locked index buffer of the current external draw
 	vector<int> hiddenWheelBlocks;		// blocks of the 3D wheel cars in the current external draw
 	bool wheelBlocksLogged = false;
+	float (*tweakerSteerPos)[3] = NULL;	// set on the first draw when Tweaker's SteerPos is enabled, Tweaker loads after ApplyPatches
+	bool tweakerSteerPosChecked = false;
 	map<BYTE*, ExternalWheelObjects> externalWheelObjects;	// per cockpit wheel mesh
 	vector<BYTE*> drawnMeshes;			// meshes whose objects were changed by the current external draw
 	int numDynamicData = 0;				// read from GP4's code by readDynamicDataCount(), 0 = no gears and flags
@@ -1528,18 +1535,57 @@ namespace SteeringWheels
 		return max(-pi / 2.0f, min(pi / 2.0f, angle));
 	}
 
+	bool tweakerSteerPosition(BYTE* car, float& x, float& y, float& z)
+	{
+		if (!tweakerSteerPosChecked)
+		{
+			tweakerSteerPosChecked = true;
+
+			Tweaker* tweaker = Tweaker::getInstance();
+
+			if (tweaker != NULL && tweaker->isEnabled() && tweaker->getTweakState("SteerPos"))
+			{
+				tweakerSteerPos = MemUtils::addressToPtr<float[3]>(tweakerSteerPosTable);
+			}
+
+			OutputGP4PPDebugString("Steering Wheels: GP4 Tweaker SteerPos " + string(tweakerSteerPos != NULL ? "enabled, used for the 3D external steering wheels" : "not enabled"));
+		}
+
+		if (tweakerSteerPos == NULL)
+		{
+			return false;
+		}
+
+		// Same driver lookup as Tweaker
+		int driver = min((int)(field<DWORD>(car, CAR_DRIVER_INDEX) & 0x3f), TWEAKER_STEER_POS_DRIVERS - 1);
+
+		x = tweakerSteerPos[driver][0];
+		y = tweakerSteerPos[driver][1];
+		z = tweakerSteerPos[driver][2];
+
+		return true;
+	}
+
 	D3DMATRIX externalWheelMatrix(BYTE* car, int team)
 	{
 		// The mesh origin is the rotation point: placed at the centre of the flat wheel, turned and tilted like in the cockpit
-		float offsetY = MemUtils::addressToValue<float>(stWheelTeamOffsets + team * 8);
-		float offsetZ = MemUtils::addressToValue<float>(stWheelTeamOffsets + team * 8 + 4);
+		float offsetX = 0.0f;
+		float offsetY, offsetZ;
+
+		// Same offsets the flat wheel gets: GP4 Tweaker's per-car SteerPos when enabled, GP4's team offsets otherwise
+		if (!tweakerSteerPosition(car, offsetX, offsetY, offsetZ))
+		{
+			offsetY = MemUtils::addressToValue<float>(stWheelTeamOffsets + team * 8);
+			offsetZ = MemUtils::addressToValue<float>(stWheelTeamOffsets + team * 8 + 4);
+		}
+
 		float wheelY = MemUtils::addressToValue<float>(stWheelY);
 		float wheelZ = MemUtils::addressToValue<float>(stWheelZ);
 		float tilt = MemUtils::addressToValue<float>(cockpitWheelTilt);
 
 		D3DMATRIX world = matrixMultiply(matrixScaling(cockpitMeshScale), matrixRotationZ(externalWheelAngle(car)));
 		world = matrixMultiply(world, matrixRotationX(tilt));
-		world = matrixMultiply(world, matrixTranslation(0.0f, offsetY + wheelY, offsetZ + wheelZ));
+		world = matrixMultiply(world, matrixTranslation(offsetX, offsetY + wheelY, offsetZ + wheelZ));
 
 		return matrixMultiply(world, field<D3DMATRIX>(car, CAR_MATRIX));
 	}
