@@ -114,7 +114,7 @@ namespace GP4PP
 
 	inline D3DMATRIX matrixMultiply(const D3DMATRIX& a, const D3DMATRIX& b)
 	{
-		D3DMATRIX result;
+		D3DMATRIX result = {};
 
 		for (int row = 0; row < 4; row++)
 		{
