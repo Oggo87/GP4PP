@@ -414,10 +414,10 @@ namespace SteeringWheels
 	// One cockpit steering wheel or dash file, shared by every car whose asset name resolves to it
 	struct CockpitMesh
 	{
-		bool loaded;	// false when the file was not found or failed to load
-		BYTE* mesh;
-		DWORD meshIndex;
-		string fileName;
+		bool loaded = false;	// false when the file was not found or failed to load
+		BYTE* mesh = nullptr;
+		DWORD meshIndex = -1;
+		string fileName = "";
 	};
 
 	// Dash and steering wheel combination used by at least one car, with the object mappings into both
@@ -438,11 +438,11 @@ namespace SteeringWheels
 	// Objects of a cockpit steering wheel mesh shown on the external wheels, -1 when the mesh does not have them
 	struct ExternalWheelObjects
 	{
-		vector<int> statics;
-		int revOn[2][NUM_REV_LIGHTS];		// left, right
-		int flagOn[2][NUM_FLAG_LIGHTS];		// left, right
-		int gears[NUM_GEARS];
-		vector<pair<int, int>> displays;		// cockpit slot and mesh object of each per-car display object found
+		vector<int> statics = {};
+		int revOn[2][NUM_REV_LIGHTS] = {};		// left, right
+		int flagOn[2][NUM_FLAG_LIGHTS] = {};		// left, right
+		int gears[NUM_GEARS] = {};
+		vector<pair<int, int>> displays = {};		// cockpit slot and mesh object of each per-car display object found
 	};
 
 	// External wheels storage variables
@@ -1327,7 +1327,7 @@ namespace SteeringWheels
 			}
 		}
 
-		CockpitSet set;
+		CockpitSet set = {};
 		set.dash = dash;
 		set.wheel = wheel;
 
