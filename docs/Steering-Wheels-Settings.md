@@ -23,6 +23,7 @@ PerTeam = false
 PerDriver = false
 AutoName = true
 FileName = 
+AlwaysShowLCD = false
 
 [CockpitDashes]
 PerTeam = false
@@ -81,9 +82,15 @@ Per-team or per-car steering wheel meshes in the cockpit view.
 
 Each mesh is a full replacement for `cars\cockpits\cockpit_wheel.gp4`, so it can have its own shape, objects and textures. The mesh of the car being viewed is selected automatically, including when switching between cars. Displays, lights and buttons keep working for every object the mesh contains, using the same object names as the default mesh. Objects that are missing from a mesh are simply not shown.
 
+The LCD text is drawn on the mesh's own `LCD` object, with the same layout and size it has on the default steering wheel, so it follows wherever the `LCD` object is placed in the mesh. The object name is not case sensitive (`LCD`, `lcd`). The log lists, for each steering wheel mesh, whether it has an `LCD` object.
+
 The meshes are loaded together with the default cockpit meshes, once per file, and are released when returning to the menu.
 
 The meshes use the same shader as the default cockpit steering wheel, so they follow the [Steering Wheel Advanced Car Shader](General-Settings.md#Steering-Wheel-Advanced-Car-Shader) setting.
+
+### AlwaysShowLCD
+
+When enabled, the LCD is also shown on steering wheels that have no `LCD` object, in the same place as on the default steering wheel. When disabled (default), the LCD is only shown on steering wheels that have an `LCD` object.
 
 ## CockpitDashes
 

@@ -1,5 +1,9 @@
 # Version History
 
+* 2.3.2
+    * The LCD text on per-team and per-car cockpit steering wheels is now drawn on each steering wheel's own `LCD` object, instead of where it is on the default steering wheel. See [Steering Wheels Settings](Steering-Wheels-Settings.md#CockpitSteeringWheels) for more details
+    * Added option to always show the LCD text on cockpit steering wheels that have no `LCD` object, in the same place as on the default steering wheel. See [Steering Wheels Settings](Steering-Wheels-Settings.md#AlwaysShowLCD) for more details
+
 * 2.3.1
     * Added GP4 Tweaker compatibility for the 3D external steering wheels: when GP4 Tweaker's `SteerPos` tweak is enabled, they use its per-car steering wheel positions. See [Steering Wheels Settings](Steering-Wheels-Settings.md#UseCockpitMesh) for more details
 

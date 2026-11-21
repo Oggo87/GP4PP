@@ -68,6 +68,7 @@ namespace SteeringWheels
 	bool useCockpitMesh = false;
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
+	bool alwaysShowLcd = false;
 
 	// Constants
 	const int NUM_COCKPIT_OBJECTS = 0x126;
@@ -92,6 +93,7 @@ namespace SteeringWheels
 	DWORD cockpitLoadMeshCall = 0x00495d51;
 	DWORD cockpitUpdateCall = 0x0049d346;
 	DWORD cockpitDestructorCall = 0x00498074;
+	DWORD lcdDrawCall = 0x0049cfa6;
 
 	// Original bytes of the call instructions above, checked before patching
 	BYTE initCarSteeringWheelsBytes[] = { 0xe8, 0x9d, 0xda, 0xff, 0xff };
@@ -100,6 +102,7 @@ namespace SteeringWheels
 	BYTE cockpitLoadMeshBytes[] = { 0xe8, 0xfa, 0x9a, 0xfd, 0xff };
 	BYTE cockpitUpdateBytes[] = { 0xe8, 0xc5, 0x35, 0xfd, 0xff };
 	BYTE cockpitDestructorBytes[] = { 0xe8, 0xc7, 0x74, 0xfd, 0xff };
+	BYTE lcdDrawBytes[] = { 0xe8, 0x65, 0xdc, 0xfd, 0xff };
 
 	// DrawCarSteeringWheels instructions replaced by a jump, for the gloves and arms of the 3D external wheels
 	DWORD wheelIndexBlockAdd = 0x0048b4d3;		// add ecx, <offset of the last car's indices>, ecx = locked index buffer
@@ -151,6 +154,7 @@ namespace SteeringWheels
 	DWORD CockpitLoadMesh = 0x0046f850;
 	DWORD CockpitUpdate = 0x00470910;
 	DWORD CockpitDestructor = 0x0046f540;
+	DWORD LcdDraw = 0x0047ac10;
 	DWORD GetTextureIndex = 0x00450710;
 	DWORD BackupTextureBasePath = 0x0044f5c0;
 	DWORD SetTextureBasePath = 0x0044f4f0;
@@ -177,6 +181,7 @@ namespace SteeringWheels
 	typedef void(__thiscall* CockpitLoadMeshType)(BYTE*, BYTE*);
 	typedef void(__thiscall* CockpitUpdateType)(BYTE*, DWORD, int);
 	typedef void(__thiscall* CockpitDestructorType)(BYTE*);
+	typedef void(__thiscall* LcdDrawType)(BYTE*);
 	typedef int(__thiscall* GetTextureIndexType)(BYTE*, const char*, int, int, int, int, int, int);
 	typedef void(__thiscall* BackupTextureBasePathType)(BYTE*);
 	typedef void(__thiscall* SetTextureBasePathType)(BYTE*, const char*);
@@ -204,6 +209,7 @@ namespace SteeringWheels
 	CockpitLoadMeshType CockpitLoadMeshFunc = (CockpitLoadMeshType)CockpitLoadMesh;
 	CockpitUpdateType CockpitUpdateFunc = (CockpitUpdateType)CockpitUpdate;
 	CockpitDestructorType CockpitDestructorFunc = (CockpitDestructorType)CockpitDestructor;
+	LcdDrawType LcdDrawFunc = (LcdDrawType)LcdDraw;
 	GetTextureIndexType GetTextureIndexFunc = (GetTextureIndexType)GetTextureIndex;
 	BackupTextureBasePathType BackupTextureBasePathFunc = (BackupTextureBasePathType)BackupTextureBasePath;
 	SetTextureBasePathType SetTextureBasePathFunc = (SetTextureBasePathType)SetTextureBasePath;
@@ -308,6 +314,8 @@ namespace SteeringWheels
 	const DWORD COCKPIT_OBJECT_INDICES = 0x530;
 	const DWORD COCKPIT_DASH_MESH = 0xd88;
 	const DWORD COCKPIT_WHEEL_MESH = 0xd8c;
+	const DWORD LCD_MESH = 0x00;				// CGP4LCD mesh_0x0, the "LCD" object of this mesh places the text
+	const DWORD MESH_FILE_NAME = 0xa0;			// CGP4Mesh fileName_0xa0, char[128]
 	const DWORD COCKPIT_WORLD_MATRIX = 0xcbc;
 	const DWORD COCKPIT_ROTATION_MATRIX = 0xcfc;
 
@@ -478,6 +486,7 @@ namespace SteeringWheels
 	BYTE* cockpitObject = NULL;
 	BYTE* vanillaDashMesh = NULL;
 	BYTE* vanillaWheelMesh = NULL;
+	vector<BYTE*> lcdLoggedMeshes;		// wheel meshes whose LCD object was logged
 	CockpitMapping vanillaMapping;
 	vector<CockpitMesh> cockpitDashMeshes;
 	vector<CockpitMesh> cockpitWheelMeshes;
@@ -1235,6 +1244,7 @@ namespace SteeringWheels
 		cockpitObject = NULL;
 		vanillaDashMesh = NULL;
 		vanillaWheelMesh = NULL;
+		lcdLoggedMeshes.clear();
 		selectedSet = VANILLA;
 
 		cockpitDashMeshes.clear();
@@ -1510,6 +1520,45 @@ namespace SteeringWheels
 
 		// original function call
 		CockpitDestructorFunc(cockpit);
+	}
+
+	void __fastcall lcdDrawFunc(BYTE* lcd, void* /*edx*/)
+	{
+		BYTE* cockpit = MemUtils::addressToValue<BYTE*>(cockpitPointer);
+		BYTE* lcdMesh = lcd != NULL ? field<BYTE*>(lcd, LCD_MESH) : NULL;
+		BYTE* wheelMesh = (cockpit != NULL && cockpit == cockpitObject) ? field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) : NULL;
+		bool custom = wheelMesh != NULL && lcdMesh != NULL && wheelMesh != lcdMesh;
+		bool hasLcd = custom && GetObjectIndexByNameFunc(wheelMesh, "LCD") != 0xffffffff;
+
+		if (custom && find(lcdLoggedMeshes.begin(), lcdLoggedMeshes.end(), wheelMesh) == lcdLoggedMeshes.end())
+		{
+			lcdLoggedMeshes.push_back(wheelMesh);
+
+			OutputGP4PPDebugString(string("Steering Wheels: ") + reinterpret_cast<const char*>(wheelMesh + MESH_FILE_NAME)
+				+ (hasLcd ? " has an LCD object" : (alwaysShowLcd ? " has no LCD object, LCD forced (AlwaysShowLCD)" : " has no LCD object, LCD not shown")));
+		}
+
+		if (hasLcd)
+		{
+			// GP4 places the text with the LCD object of the wheel it was built with: use the drawn wheel's own
+			field<BYTE*>(lcd, LCD_MESH) = wheelMesh;
+		}
+		else if (custom && alwaysShowLcd)
+		{
+			// The default wheel is not placed while another wheel is drawn: put it where the drawn wheel is
+			field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) = lcdMesh;
+			CockpitSetMeshTransformsFunc(cockpit, cockpit + COCKPIT_ROTATION_MATRIX, cockpit + COCKPIT_WORLD_MATRIX);
+			field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) = wheelMesh;
+		}
+
+		// original function call
+		LcdDrawFunc(lcd);
+
+		// The LCD keeps the mesh it was built with, ours are freed with the cockpit
+		if (hasLcd)
+		{
+			field<BYTE*>(lcd, LCD_MESH) = lcdMesh;
+		}
 	}
 
 	//
@@ -2297,6 +2346,15 @@ namespace SteeringWheels
 		OutputGP4PPDebugString("CockpitMeshScale " + externalSettings.name + ": " + to_string(cockpitMeshScale));
 
 		loadAssetSettings(iniSettings, cockpitSettings);
+
+		try
+		{
+			alwaysShowLcd = iniSettings[cockpitSettings.section]["AlwaysShowLCD"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("AlwaysShowLCD " + cockpitSettings.name + ": " + (alwaysShowLcd ? "Enabled" : "Disabled"));
+
 		loadAssetSettings(iniSettings, dashSettings);
 	}
 
@@ -2353,7 +2411,8 @@ namespace SteeringWheels
 		{
 			if (checkCallBytes(cockpitLoadMeshCall, cockpitLoadMeshBytes, "CGP4Cockpit::LoadMesh")
 				&& checkCallBytes(cockpitUpdateCall, cockpitUpdateBytes, "CGP4Cockpit update")
-				&& checkCallBytes(cockpitDestructorCall, cockpitDestructorBytes, "CGP4Cockpit destructor"))
+				&& checkCallBytes(cockpitDestructorCall, cockpitDestructorBytes, "CGP4Cockpit destructor")
+				&& checkCallBytes(lcdDrawCall, lcdDrawBytes, "CGP4LCD::Draw"))
 			{
 				resetCockpitState();
 
@@ -2363,6 +2422,8 @@ namespace SteeringWheels
 				MemUtils::injectFunctionCall(cockpitUpdateCall, PtrToUlong(cockpitUpdateFunc), VAR_NAME(cockpitUpdateFunc));
 
 				MemUtils::injectFunctionCall(cockpitLoadMeshCall, PtrToUlong(cockpitLoadMeshFunc), VAR_NAME(cockpitLoadMeshFunc));
+
+				MemUtils::injectFunctionCall(lcdDrawCall, PtrToUlong(lcdDrawFunc), VAR_NAME(lcdDrawFunc));
 
 				cockpitPatched = true;
 			}
