@@ -5,6 +5,7 @@ These sections contain entries to give each team, or each car, its own steering 
 * [ExternalSteeringWheels](#ExternalSteeringWheels)
 * [CockpitSteeringWheels](#CockpitSteeringWheels)
 * [CockpitDashes](#CockpitDashes)
+* [CockpitLCD](#CockpitLCD)
 * [PerTeam and PerDriver](#PerTeam-and-PerDriver)
 * [AutoName](#AutoName)
 * [FileName](#FileName)
@@ -23,23 +24,30 @@ PerTeam = false
 PerDriver = false
 AutoName = true
 FileName = 
-AlwaysShowLCD = false
 
 [CockpitDashes]
 PerTeam = false
 PerDriver = false
 AutoName = true
 FileName = 
+
+[CockpitLCD]
+PerTeam = false
+PerDriver = false
+PerWheel = false
+AutoName = true
+FileName = 
+AlwaysShow = false
 ```
 
 All sections work the same way and are independent of each other. All are disabled by default, and GP4's own steering wheels and dash are used.
 
 A section is enabled when:
 
-* `AutoName` is enabled and `PerTeam` or `PerDriver` is enabled, or
+* `AutoName` is enabled and `PerTeam` or `PerDriver` (or `PerWheel` for [CockpitLCD](#CockpitLCD)) is enabled, or
 * `AutoName` is disabled and `FileName` is not empty
 
-Every car is handled individually: the file name decides whether two cars share a steering wheel or dash. Every car that has its own file gets its own steering wheel or dash, while cars without one keep the default GP4 one. All files are checked the same way GP4 checks its own assets, so they can be placed in `cars.wad` or, when GP4 does not use the WAD, in the `cars` folder.
+Every car is handled individually: the file name decides whether two cars share a steering wheel or dash. Every car that has its own file gets its own steering wheel or dash, while cars without one keep the default GP4 one. All files are checked the same way GP4 checks its own assets, so they can be placed in `cars.wad` or, when GP4 does not use the WAD, in the `cars` folder. The only exception are the LCD position files of [CockpitLCD](#CockpitLCD), which are always read from GP4's `fonts` folder on disk.
 
 ## ExternalSteeringWheels
 
@@ -82,15 +90,11 @@ Per-team or per-car steering wheel meshes in the cockpit view.
 
 Each mesh is a full replacement for `cars\cockpits\cockpit_wheel.gp4`, so it can have its own shape, objects and textures. The mesh of the car being viewed is selected automatically, including when switching between cars. Displays, lights and buttons keep working for every object the mesh contains, using the same object names as the default mesh. Objects that are missing from a mesh are simply not shown.
 
-The LCD text is drawn on the mesh's own `LCD` object, with the same layout and size it has on the default steering wheel, so it follows wherever the `LCD` object is placed in the mesh. The object name is not case sensitive (`LCD`, `lcd`). The log lists, for each steering wheel mesh, whether it has an `LCD` object.
+The LCD text is drawn on the mesh's own `LCD` object, with the same layout and size it has on the default steering wheel, so it follows wherever the `LCD` object is placed in the mesh. The object name is not case sensitive (`LCD`, `lcd`). The log lists, for each steering wheel mesh, whether it has an `LCD` object. Steering wheels without an `LCD` object only show the LCD when [`AlwaysShow`](#AlwaysShow) is enabled, and the text positions can be changed per team, car or steering wheel with [CockpitLCD](#CockpitLCD).
 
 The meshes are loaded together with the default cockpit meshes, once per file, and are released when returning to the menu.
 
 The meshes use the same shader as the default cockpit steering wheel, so they follow the [Steering Wheel Advanced Car Shader](General-Settings.md#Steering-Wheel-Advanced-Car-Shader) setting.
-
-### AlwaysShowLCD
-
-When enabled, the LCD is also shown on steering wheels that have no `LCD` object, in the same place as on the default steering wheel. When disabled (default), the LCD is only shown on steering wheels that have an `LCD` object.
 
 ## CockpitDashes
 
@@ -99,6 +103,41 @@ Per-team or per-car dash meshes in the cockpit view.
 Each mesh is a full replacement for `cars\cockpits\cockpit_dash.gp4`, and works the same way as the cockpit steering wheel meshes: it is selected automatically for the car being viewed, it is loaded once per file and released when returning to the menu, and it uses the same shader as the default cockpit dash.
 
 Dashes and cockpit steering wheels are independent of each other, and can be per team or per car separately. Displays, lights and buttons keep working for every object the dash and steering wheel of the viewed car contain, using the same object names as the default meshes.
+
+## CockpitLCD
+
+Per-team, per-car or per-steering wheel positions of the LCD texts on the cockpit steering wheel. GP4 reads the position of every LCD text from `fonts\<language>.pos`, where `<language>` is the language GP4 runs in (`English`, `French`, `German`, `Spanish`, `Portuguese` or `Italian`). This section gives each team, car or steering wheel its own copy of that file. The LCD texts themselves and their size are always GP4's.
+
+The files are placed in GP4's `fonts` folder, in a subfolder per team, car or steering wheel, with the same name and format as GP4's own file. They have to be on disk: like GP4's own `.pos` files, they are never read from `cars.wad`. The easiest way to make one is to copy GP4's own file and change the positions: only the entries that are in the file are moved, any entry left out keeps GP4's position.
+
+| Setting | File |
+|---|---|
+| `PerTeam` | `fonts\{teamname}\{language}.pos` |
+| `PerDriver` | `fonts\{teamname}_car{car}\{language}.pos` |
+| `PerWheel` | `fonts\` followed by the folder of the [CockpitSteeringWheels](#CockpitSteeringWheels) file name |
+
+`PerWheel` gives the LCD positions the same names the cockpit steering wheels use, so every steering wheel can have its own positions, shared by all the cars that use it. It supersedes `PerTeam` and `PerDriver`, and needs [CockpitSteeringWheels](#CockpitSteeringWheels) to be enabled. The folder of the steering wheel file name is used, without the `cockpits\` part when the steering wheels use `AutoName`, and without the extension when the steering wheel file name has no folder. Only cars whose own steering wheel was loaded use these positions; cars that ended up with the default steering wheel keep GP4's.
+
+| [CockpitSteeringWheels](#CockpitSteeringWheels) | LCD positions with `PerWheel` |
+|---|---|
+| `AutoName`, `PerTeam` | `fonts\{teamname}\{language}.pos` |
+| `AutoName`, `PerDriver` | `fonts\{teamname}_car{car}\{language}.pos` |
+| `FileName = stwheels\\{teamname}_{car}\\cockpit_wheel.gp4` | `fonts\stwheels\{teamname}_{car}\{language}.pos` |
+
+With `AutoName` disabled, `FileName` is relative to the `fonts` folder, and can use the `{language}` variable as well as the other [variables](#FileName). A file name without `{language}` is used for every language.
+
+Example - Ferrari's LCD positions with `PerTeam` enabled, in English and Italian
+
+```
+fonts\ferrari\English.pos
+fonts\ferrari\Italian.pos
+```
+
+The files are read once per session, the first time the LCD is drawn. The log lists, for every car, the file that was loaded or not found, and for every file how many positions it moved.
+
+### AlwaysShow
+
+When enabled, the LCD is also shown on cockpit steering wheels that have no `LCD` object, in the same place as on the default steering wheel. When disabled (default), the LCD is only shown on steering wheels that have an `LCD` object.
 
 ## Textures used by a cockpit mesh
 
@@ -124,6 +163,7 @@ When enabled, the file names below are used, depending on `PerTeam` and `PerDriv
 | External steering wheel texture | `stwheel_{teamname}.tga` | `stwheel_{teamname}_car{car}.tga` |
 | Cockpit steering wheel mesh | `cockpits\{teamname}\cockpit_wheel.gp4` | `cockpits\{teamname}_car{car}\cockpit_wheel.gp4` |
 | Cockpit dash mesh | `cockpits\{teamname}\cockpit_dash.gp4` | `cockpits\{teamname}_car{car}\cockpit_dash.gp4` |
+| Cockpit LCD positions | `fonts\{teamname}\{language}.pos` | `fonts\{teamname}_car{car}\{language}.pos` |
 
 Example - Ferrari's steering wheels and dash with `PerTeam` enabled in all sections
 
@@ -157,6 +197,8 @@ Used when [`AutoName`](#AutoName) is disabled, this setting allows to specify a 
 * `{team}` - the team index, indexed 1 through 11
 * `{car}` - indexed 1 and 2 for first and second car of the team
 * `{driverindex}` - the car index, indexed 1 through 22
+
+[CockpitLCD](#CockpitLCD) file names, relative to the `fonts` folder instead, can also use `{language}`, the language GP4 runs in (`English`, `French`, `German`, `Spanish`, `Portuguese` or `Italian`).
 
 Whether a steering wheel or dash is per team or per car only depends on the variables used: a name with `{car}` or `{driverindex}` gives each car its own file, a name with only `{teamname}` or `{team}` is shared by both cars of a team.
 

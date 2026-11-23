@@ -68,6 +68,8 @@ namespace SteeringWheels
 	bool useCockpitMesh = false;
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
+	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
+	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
 
 	// Constants
@@ -155,6 +157,9 @@ namespace SteeringWheels
 	DWORD CockpitUpdate = 0x00470910;
 	DWORD CockpitDestructor = 0x0046f540;
 	DWORD LcdDraw = 0x0047ac10;
+	DWORD StringConstruct = 0x00471ce0;		// std::basic_string(const char*, const allocator&), MSVC6
+	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
+	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
 	DWORD GetTextureIndex = 0x00450710;
 	DWORD BackupTextureBasePath = 0x0044f5c0;
 	DWORD SetTextureBasePath = 0x0044f4f0;
@@ -182,6 +187,9 @@ namespace SteeringWheels
 	typedef void(__thiscall* CockpitUpdateType)(BYTE*, DWORD, int);
 	typedef void(__thiscall* CockpitDestructorType)(BYTE*);
 	typedef void(__thiscall* LcdDrawType)(BYTE*);
+	typedef BYTE*(__thiscall* StringConstructType)(BYTE*, const char*, const BYTE*);
+	typedef void(__thiscall* StringDestructType)(BYTE*);
+	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
 	typedef int(__thiscall* GetTextureIndexType)(BYTE*, const char*, int, int, int, int, int, int);
 	typedef void(__thiscall* BackupTextureBasePathType)(BYTE*);
 	typedef void(__thiscall* SetTextureBasePathType)(BYTE*, const char*);
@@ -210,6 +218,9 @@ namespace SteeringWheels
 	CockpitUpdateType CockpitUpdateFunc = (CockpitUpdateType)CockpitUpdate;
 	CockpitDestructorType CockpitDestructorFunc = (CockpitDestructorType)CockpitDestructor;
 	LcdDrawType LcdDrawFunc = (LcdDrawType)LcdDraw;
+	StringConstructType StringConstructFunc = (StringConstructType)StringConstruct;
+	StringDestructType StringDestructFunc = (StringDestructType)StringDestruct;
+	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
 	GetTextureIndexType GetTextureIndexFunc = (GetTextureIndexType)GetTextureIndex;
 	BackupTextureBasePathType BackupTextureBasePathFunc = (BackupTextureBasePathType)BackupTextureBasePath;
 	SetTextureBasePathType SetTextureBasePathFunc = (SetTextureBasePathType)SetTextureBasePath;
@@ -316,6 +327,20 @@ namespace SteeringWheels
 	const DWORD COCKPIT_WHEEL_MESH = 0xd8c;
 	const DWORD LCD_MESH = 0x00;				// CGP4LCD mesh_0x0, the "LCD" object of this mesh places the text
 	const DWORD MESH_FILE_NAME = 0xa0;			// CGP4Mesh fileName_0xa0, char[128]
+	const DWORD LCD_LANGUAGE = 0x08;			// CGP4LCD LanguageData*
+	const DWORD LCD_GROUPS = 0x19c;				// CGP4LCD GP4ScreenObjectManager*[40]
+	const int LCD_NUM_GROUPS = 40;
+	const DWORD GROUP_OBJECTS = 0x0c;			// GP4ScreenObjectManager GP4ScreenObject*[20]
+	const DWORD GROUP_COUNT = 0x5c;
+	const int GROUP_MAX_OBJECTS = 20;
+	const DWORD OBJECT_POS_X = 0xb8;			// GP4ScreenObject posX_0xb8 / posY_0xbc, from the .pos file
+	const DWORD OBJECT_POS_Y = 0xbc;
+	const DWORD LANGUAGE_SELECTED = 0x10;		// LanguageData selectedLanguage_0x10
+	const DWORD LANGUAGE_NAMES = 0x24;			// LanguageData basic_string[6]
+	const DWORD LANGUAGE_FONTS_FOLDER = 0x14;	// LanguageData basic_string fontsFolder_0x14, "fonts"
+	const int NUM_LANGUAGES = 6;
+	const DWORD STRING_SIZE = 0x10;				// MSVC6 std::basic_string
+	const DWORD STRING_PTR = 0x04;
 	const DWORD COCKPIT_WORLD_MATRIX = 0xcbc;
 	const DWORD COCKPIT_ROTATION_MATRIX = 0xcfc;
 
@@ -428,6 +453,21 @@ namespace SteeringWheels
 		string fileName = "";
 	};
 
+	// Position of one LCD text or value object, read from a steering wheel's own .pos file
+	struct LcdPosition
+	{
+		float x;
+		float y;
+		bool set;			// false: GP4's position is kept
+	};
+
+	// One LCD positions file, shared by every car whose file name resolves to it
+	struct LcdLayoutFile
+	{
+		string fileName;
+		vector<LcdPosition> positions;	// empty: not found, or nothing moved
+	};
+
 	// Dash and steering wheel combination used by at least one car, with the object mappings into both
 	struct CockpitSet
 	{
@@ -486,7 +526,9 @@ namespace SteeringWheels
 	BYTE* cockpitObject = NULL;
 	BYTE* vanillaDashMesh = NULL;
 	BYTE* vanillaWheelMesh = NULL;
-	vector<BYTE*> lcdLoggedMeshes;		// wheel meshes whose LCD object was logged
+	vector<LcdLayoutFile> lcdLayoutFiles;
+	vector<int> carLcdLayout;			// index into lcdLayoutFiles per car, or VANILLA for GP4's positions
+	bool lcdLayoutsLoaded = false;		// LCD positions resolved for this session
 	CockpitMapping vanillaMapping;
 	vector<CockpitMesh> cockpitDashMeshes;
 	vector<CockpitMesh> cockpitWheelMeshes;
@@ -1244,7 +1286,9 @@ namespace SteeringWheels
 		cockpitObject = NULL;
 		vanillaDashMesh = NULL;
 		vanillaWheelMesh = NULL;
-		lcdLoggedMeshes.clear();
+		lcdLayoutFiles.clear();
+		carLcdLayout.clear();
+		lcdLayoutsLoaded = false;
 		selectedSet = VANILLA;
 
 		cockpitDashMeshes.clear();
@@ -1522,6 +1566,219 @@ namespace SteeringWheels
 		CockpitDestructorFunc(cockpit);
 	}
 
+	// Every LCD text and value object, in the order GP4 draws them
+	vector<BYTE*> lcdObjects(BYTE* lcd)
+	{
+		vector<BYTE*> objects;
+
+		for (int group = 0; group < LCD_NUM_GROUPS; group++)
+		{
+			BYTE* manager = field<BYTE*>(lcd, LCD_GROUPS + group * 4);
+
+			if (manager == NULL)
+			{
+				continue;
+			}
+
+			int count = min(field<int>(manager, GROUP_COUNT), GROUP_MAX_OBJECTS);
+
+			for (int i = 0; i < count; i++)
+			{
+				BYTE* object = field<BYTE*>(manager, GROUP_OBJECTS + i * 4);
+
+				if (object != NULL)
+				{
+					objects.push_back(object);
+				}
+			}
+		}
+
+		return objects;
+	}
+
+	string lcdLanguageName(BYTE* lcd)
+	{
+		BYTE* language = field<BYTE*>(lcd, LCD_LANGUAGE);
+
+		if (language == NULL)
+		{
+			return "";
+		}
+
+		int selected = field<int>(language, LANGUAGE_SELECTED);
+
+		if (selected < 0 || selected >= NUM_LANGUAGES)
+		{
+			return "";
+		}
+
+		const char* name = field<const char*>(language, LANGUAGE_NAMES + selected * STRING_SIZE + STRING_PTR);
+
+		return name != NULL ? name : "";
+	}
+
+	string lcdFontsFolder(BYTE* lcd)
+	{
+		BYTE* language = field<BYTE*>(lcd, LCD_LANGUAGE);
+		const char* folder = language != NULL ? field<const char*>(language, LANGUAGE_FONTS_FOLDER + STRING_PTR) : NULL;
+
+		return folder != NULL ? folder : "";
+	}
+
+	// Reads an LCD positions file with GP4's loader, keeping GP4's positions in the LCD objects
+	vector<LcdPosition> loadLcdLayout(BYTE* lcd, const string& posFile)
+	{
+		vector<LcdPosition> positions;
+
+		// GP4's loader opens the file with fopen: only files on disk, never in cars.wad
+		if (GetFileAttributesA(posFile.c_str()) == INVALID_FILE_ATTRIBUTES)
+		{
+			return positions;
+		}
+
+		BYTE path[STRING_SIZE];
+		BYTE allocator = 0;
+		int moved = 0;
+
+		StringConstructFunc(path, posFile.c_str(), &allocator);
+
+		for (BYTE* object : lcdObjects(lcd))
+		{
+			float x = field<float>(object, OBJECT_POS_X);
+			float y = field<float>(object, OBJECT_POS_Y);
+			LcdPosition position = { x, y, false };
+
+			if (PosObjectLoadFunc(object, path))
+			{
+				position.x = field<float>(object, OBJECT_POS_X);
+				position.y = field<float>(object, OBJECT_POS_Y);
+
+				// GP4 gives 0, 0 for a key that is not in the file
+				position.set = position.x != 0.0f || position.y != 0.0f;
+				moved += position.set ? 1 : 0;
+			}
+
+			field<float>(object, OBJECT_POS_X) = x;
+			field<float>(object, OBJECT_POS_Y) = y;
+
+			positions.push_back(position);
+		}
+
+		StringDestructFunc(path);
+
+		OutputGP4PPDebugString("Steering Wheels: LCD positions " + posFile + ": " + to_string(moved) + " of " + to_string(positions.size()) + " moved");
+
+		if (moved == 0)
+		{
+			positions.clear();
+		}
+
+		return positions;
+	}
+
+	// Resolves every car's LCD positions file on the first LCD draw of the session, when the LCD objects exist
+	void loadLcdLayouts(BYTE* lcd)
+	{
+		lcdLayoutsLoaded = true;
+		carLcdLayout.assign(numCars, VANILLA);
+
+		for (const CockpitMesh& entry : cockpitWheelMeshes)
+		{
+			if (entry.loaded && entry.mesh != NULL)
+			{
+				bool hasLcd = GetObjectIndexByNameFunc(entry.mesh, "LCD") != 0xffffffff;
+
+				OutputGP4PPDebugString("Steering Wheels: " + entry.fileName
+					+ (hasLcd ? " has an LCD object" : (alwaysShowLcd ? " has no LCD object, LCD forced (AlwaysShow)" : " has no LCD object, LCD not shown")));
+			}
+		}
+
+		if (!lcdSettings.enabled)
+		{
+			return;
+		}
+
+		string language = lcdLanguageName(lcd);
+		string fontsFolder = lcdFontsFolder(lcd);
+
+		if (language.empty() || fontsFolder.empty())
+		{
+			OutputGP4PPDebugString("Steering Wheels: GP4 language or fonts folder not readable, using default LCD positions");
+
+			return;
+		}
+
+		map<string, string> variables;
+		variables["language"] = language;
+
+		for (int carIndex = 0; carIndex < numCars; carIndex++)
+		{
+			if (!validTeam(carSlot(carIndex)))
+			{
+				continue;
+			}
+
+			// Positions made for a custom steering wheel are only used by the cars that have it
+			if (lcdPerWheel && lcdSettings.autoName)
+			{
+				int set = carIndex < (int)carCockpitSet.size() ? carCockpitSet[carIndex] : VANILLA;
+
+				if (set == VANILLA || cockpitSets[set].wheel == VANILLA)
+				{
+					OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " has the default steering wheel, using default LCD positions");
+
+					continue;
+				}
+			}
+
+			string fileName = fontsFolder + "\\" + replaceVariables(carFileName(lcdSettings.fileName, carIndex), variables);
+			int index = VANILLA;
+
+			for (size_t i = 0; i < lcdLayoutFiles.size(); i++)
+			{
+				if (_stricmp(lcdLayoutFiles[i].fileName.c_str(), fileName.c_str()) == 0)
+				{
+					index = (int)i;
+				}
+			}
+
+			bool shared = index != VANILLA;
+
+			if (!shared)
+			{
+				lcdLayoutFiles.push_back({ fileName, loadLcdLayout(lcd, fileName) });
+				index = (int)lcdLayoutFiles.size() - 1;
+			}
+
+			bool found = !lcdLayoutFiles[index].positions.empty();
+
+			OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " LCD positions "
+				+ (found ? (shared ? "shared" : "loaded") : "not found, using default") + " [" + fileName + "]");
+
+			carLcdLayout[carIndex] = found ? index : VANILLA;
+		}
+	}
+
+	// Swaps the wheel's positions with the ones in the LCD objects: called once before and once after the draw
+	void swapLcdLayout(BYTE* lcd, vector<LcdPosition>& positions)
+	{
+		vector<BYTE*> objects = lcdObjects(lcd);
+
+		if (objects.size() != positions.size())
+		{
+			return;
+		}
+
+		for (size_t i = 0; i < objects.size(); i++)
+		{
+			if (positions[i].set)
+			{
+				swap(field<float>(objects[i], OBJECT_POS_X), positions[i].x);
+				swap(field<float>(objects[i], OBJECT_POS_Y), positions[i].y);
+			}
+		}
+	}
+
 	void __fastcall lcdDrawFunc(BYTE* lcd, void* /*edx*/)
 	{
 		BYTE* cockpit = MemUtils::addressToValue<BYTE*>(cockpitPointer);
@@ -1530,12 +1787,18 @@ namespace SteeringWheels
 		bool custom = wheelMesh != NULL && lcdMesh != NULL && wheelMesh != lcdMesh;
 		bool hasLcd = custom && GetObjectIndexByNameFunc(wheelMesh, "LCD") != 0xffffffff;
 
-		if (custom && find(lcdLoggedMeshes.begin(), lcdLoggedMeshes.end(), wheelMesh) == lcdLoggedMeshes.end())
-		{
-			lcdLoggedMeshes.push_back(wheelMesh);
+		vector<LcdPosition>* layout = NULL;
 
-			OutputGP4PPDebugString(string("Steering Wheels: ") + reinterpret_cast<const char*>(wheelMesh + MESH_FILE_NAME)
-				+ (hasLcd ? " has an LCD object" : (alwaysShowLcd ? " has no LCD object, LCD forced (AlwaysShowLCD)" : " has no LCD object, LCD not shown")));
+		if (!lcdLayoutsLoaded && cockpit != NULL && cockpit == cockpitObject)
+		{
+			loadLcdLayouts(lcd);
+		}
+
+		int car = viewedCar();
+
+		if (car >= 0 && car < (int)carLcdLayout.size() && carLcdLayout[car] != VANILLA)
+		{
+			layout = &lcdLayoutFiles[carLcdLayout[car]].positions;
 		}
 
 		if (hasLcd)
@@ -1551,8 +1814,18 @@ namespace SteeringWheels
 			field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) = wheelMesh;
 		}
 
+		if (layout != NULL)
+		{
+			swapLcdLayout(lcd, *layout);
+		}
+
 		// original function call
 		LcdDrawFunc(lcd);
+
+		if (layout != NULL)
+		{
+			swapLcdLayout(lcd, *layout);
+		}
 
 		// The LCD keeps the mesh it was built with, ours are freed with the cockpit
 		if (hasLcd)
@@ -2318,6 +2591,36 @@ namespace SteeringWheels
 		OutputGP4PPDebugString(settings.name + ": " + (settings.enabled ? "Enabled" : "Disabled, using default"));
 	}
 
+	// [CockpitLCD] PerWheel: the folder of the cockpit steering wheel file name, mirrored in the fonts folder
+	string perWheelLcdPattern()
+	{
+		if (!cockpitSettings.enabled)
+		{
+			return "";
+		}
+
+		const string cockpitsFolder = "cockpits\\";
+		string pattern = cockpitSettings.fileName;
+		size_t folderEnd = pattern.find_last_of('\\');
+		string folder = folderEnd != string::npos ? pattern.substr(0, folderEnd) : "";
+
+		// AutoName steering wheels all live in cars\cockpits\, which the LCD folders leave out
+		if (cockpitSettings.autoName && _strnicmp(folder.c_str(), cockpitsFolder.c_str(), cockpitsFolder.size()) == 0)
+		{
+			folder = folder.substr(cockpitsFolder.size());
+		}
+
+		// No folder to mirror: the file name without its extension, so the file never ends up next to GP4's own
+		if (folder.empty())
+		{
+			string name = folderEnd != string::npos ? pattern.substr(folderEnd + 1) : pattern;
+
+			folder = name.substr(0, name.find_last_of('.'));
+		}
+
+		return folder + "\\{language}.pos";
+	}
+
 	void LoadSettings(IniFile iniSettings)
 	{
 		loadAssetSettings(iniSettings, externalSettings);
@@ -2346,21 +2649,38 @@ namespace SteeringWheels
 		OutputGP4PPDebugString("CockpitMeshScale " + externalSettings.name + ": " + to_string(cockpitMeshScale));
 
 		loadAssetSettings(iniSettings, cockpitSettings);
+		loadAssetSettings(iniSettings, dashSettings);
+		loadAssetSettings(iniSettings, lcdSettings);
 
 		try
 		{
-			alwaysShowLcd = iniSettings[cockpitSettings.section]["AlwaysShowLCD"].getAs<bool>();
+			lcdPerWheel = iniSettings[lcdSettings.section]["PerWheel"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("AlwaysShowLCD " + cockpitSettings.name + ": " + (alwaysShowLcd ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Per Wheel " + lcdSettings.name + ": " + (lcdPerWheel ? "Enabled" : "Disabled"));
 
-		loadAssetSettings(iniSettings, dashSettings);
+		// PerWheel supersedes PerDriver and PerTeam, mirroring [CockpitSteeringWheels]
+		if (lcdSettings.autoName && lcdPerWheel)
+		{
+			lcdSettings.fileName = perWheelLcdPattern();
+			lcdSettings.enabled = !lcdSettings.fileName.empty();
+
+			OutputGP4PPDebugString(lcdSettings.name + ": " + (lcdSettings.enabled ? "PerWheel file name " + lcdSettings.fileName : "PerWheel needs Cockpit Steering Wheels, using default"));
+		}
+
+		try
+		{
+			alwaysShowLcd = iniSettings[lcdSettings.section]["AlwaysShow"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("AlwaysShow " + lcdSettings.name + ": " + (alwaysShowLcd ? "Enabled" : "Disabled"));
 	}
 
 	void ApplyPatches()
 	{
-		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled;
+		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled;
 		bool externalEnabled = externalSettings.enabled || useCockpitMesh;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
 
