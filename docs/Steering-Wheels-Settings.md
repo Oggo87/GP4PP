@@ -38,6 +38,9 @@ PerWheel = false
 AutoName = true
 FileName = 
 AlwaysShow = false
+Individual = false
+Colour = 0, 0, 0
+Ini = LCDColours.ini
 ```
 
 All sections work the same way and are independent of each other. All are disabled by default, and GP4's own steering wheels and dash are used.
@@ -138,6 +141,26 @@ The files are read once per session, the first time the LCD is drawn. The log li
 ### AlwaysShow
 
 When enabled, the LCD is also shown on cockpit steering wheels that have no `LCD` object, in the same place as on the default steering wheel. When disabled (default), the LCD is only shown on steering wheels that have an `LCD` object.
+
+### Colour, Individual and Ini
+
+The colour of the LCD text works like the [visor colours](Visor-Settings.md), and does not need any of the settings above to be enabled. `Colour` is the LCD text colour, in `0-255 BGR` format, for all cars (unlike the visors, there is no alpha: GP4 draws the LCD text opaque). The default, `0, 0, 0`, is GP4's own black, and leaves GP4's code untouched.
+
+When `Individual` is enabled, each car can have its own colour, in the INI file named by `Ini` (default `LCDColours.ini`), located in the same folder as the main `GP4PP.ini` file. It contains one section per car, named sequentially `CockpitLCD1` to `CockpitLCD22` (as `{driverindex}`), each with its own `Colour` entry. Cars without an entry use `Colour` from the `CockpitLCD` section. The colour is the one of the car whose cockpit is viewed.
+
+Example - Yellow LCD text for the first Ferrari, GP4's black for all the other cars
+
+```ini
+[CockpitLCD]
+Individual = true
+Colour = 0, 0, 0
+Ini = LCDColours.ini
+```
+
+```ini
+[CockpitLCD1]
+Colour = 15, 236, 250
+```
 
 ## Textures used by a cockpit mesh
 

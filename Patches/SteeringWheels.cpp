@@ -3,6 +3,7 @@
 #include "../Utils/Helpers.h"
 #include "../Utils/D3DTypes.h"
 #include "../Utils/Tweaker.h"
+#include "../Utils/BGRA.h"
 #include "../GP4MemLib/GP4MemLib.h"
 #include "../IniLib/IniLib.h"
 #include <algorithm>
@@ -71,6 +72,11 @@ namespace SteeringWheels
 	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
 	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
+	BGRA lcdColour = { 0, 0, 0, 0 };		// GP4's own: black
+	bool lcdIndividualColours = false;
+	IniFile lcdColourIni;					// per-car sections, read once the car count is known
+	vector<DWORD> lcdCarColours;
+	bool lcdColourPatched = false;
 
 	// Constants
 	const int NUM_COCKPIT_OBJECTS = 0x126;
@@ -96,6 +102,7 @@ namespace SteeringWheels
 	DWORD cockpitUpdateCall = 0x0049d346;
 	DWORD cockpitDestructorCall = 0x00498074;
 	DWORD lcdDrawCall = 0x0049cfa6;
+	DWORD lcdColourCall = 0x0047ac52;		// CGP4LCD::Draw: call SetFontColour?(0, 0)
 
 	// Original bytes of the call instructions above, checked before patching
 	BYTE initCarSteeringWheelsBytes[] = { 0xe8, 0x9d, 0xda, 0xff, 0xff };
@@ -105,6 +112,7 @@ namespace SteeringWheels
 	BYTE cockpitUpdateBytes[] = { 0xe8, 0xc5, 0x35, 0xfd, 0xff };
 	BYTE cockpitDestructorBytes[] = { 0xe8, 0xc7, 0x74, 0xfd, 0xff };
 	BYTE lcdDrawBytes[] = { 0xe8, 0x65, 0xdc, 0xfd, 0xff };
+	BYTE lcdColourBytes[] = { 0xe8, 0x49, 0xcc, 0xff, 0xff };
 
 	// DrawCarSteeringWheels instructions replaced by a jump, for the gloves and arms of the 3D external wheels
 	DWORD wheelIndexBlockAdd = 0x0048b4d3;		// add ecx, <offset of the last car's indices>, ecx = locked index buffer
@@ -160,6 +168,7 @@ namespace SteeringWheels
 	DWORD StringConstruct = 0x00471ce0;		// std::basic_string(const char*, const allocator&), MSVC6
 	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
 	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
+	DWORD SetFontColour = 0x004778a0;		// LanguageData::SetFontColour?(int font, D3DCOLOR colour)
 	DWORD GetTextureIndex = 0x00450710;
 	DWORD BackupTextureBasePath = 0x0044f5c0;
 	DWORD SetTextureBasePath = 0x0044f4f0;
@@ -190,6 +199,7 @@ namespace SteeringWheels
 	typedef BYTE*(__thiscall* StringConstructType)(BYTE*, const char*, const BYTE*);
 	typedef void(__thiscall* StringDestructType)(BYTE*);
 	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
+	typedef void(__thiscall* SetFontColourType)(BYTE*, int, DWORD);
 	typedef int(__thiscall* GetTextureIndexType)(BYTE*, const char*, int, int, int, int, int, int);
 	typedef void(__thiscall* BackupTextureBasePathType)(BYTE*);
 	typedef void(__thiscall* SetTextureBasePathType)(BYTE*, const char*);
@@ -221,6 +231,7 @@ namespace SteeringWheels
 	StringConstructType StringConstructFunc = (StringConstructType)StringConstruct;
 	StringDestructType StringDestructFunc = (StringDestructType)StringDestruct;
 	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
+	SetFontColourType SetFontColourFunc = (SetFontColourType)SetFontColour;
 	GetTextureIndexType GetTextureIndexFunc = (GetTextureIndexType)GetTextureIndex;
 	BackupTextureBasePathType BackupTextureBasePathFunc = (BackupTextureBasePathType)BackupTextureBasePath;
 	SetTextureBasePathType SetTextureBasePathFunc = (SetTextureBasePathType)SetTextureBasePath;
@@ -1779,6 +1790,23 @@ namespace SteeringWheels
 		}
 	}
 
+	// LCD colours are BGR: GP4's font ignores alpha, so a fourth value is dropped
+	BGRA lcdColourFromIni(const vector<short>& values)
+	{
+		BGRA colour = values;
+
+		return BGRA(colour.getB(), colour.getG(), colour.getR(), 0);
+	}
+
+	// Replaces CGP4LCD::Draw's SetFontColour?(font, 0) call: thiscall with 2 stack arguments, matched by __fastcall
+	void __fastcall lcdSetFontColourFunc(BYTE* language, void* /*edx*/, int font, DWORD /*colour*/)
+	{
+		int car = viewedCar();
+		DWORD colour = (car >= 0 && car < (int)lcdCarColours.size()) ? lcdCarColours[car] : lcdColour.getColour();
+
+		SetFontColourFunc(language, font, colour);
+	}
+
 	void __fastcall lcdDrawFunc(BYTE* lcd, void* /*edx*/)
 	{
 		BYTE* cockpit = MemUtils::addressToValue<BYTE*>(cockpitPointer);
@@ -2621,7 +2649,7 @@ namespace SteeringWheels
 		return folder + "\\{language}.pos";
 	}
 
-	void LoadSettings(IniFile iniSettings)
+	void LoadSettings(IniFile iniSettings, string basePath)
 	{
 		loadAssetSettings(iniSettings, externalSettings);
 
@@ -2676,11 +2704,43 @@ namespace SteeringWheels
 		catch (exception ex) {}
 
 		OutputGP4PPDebugString("AlwaysShow " + lcdSettings.name + ": " + (alwaysShowLcd ? "Enabled" : "Disabled"));
+
+		try
+		{
+			lcdColour = lcdColourFromIni(iniSettings[lcdSettings.section]["Colour"].getVectorAs<short>());
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString(lcdSettings.name + " Colour: B: " + to_string(lcdColour.getB()) + " G: " + to_string(lcdColour.getG()) + " R: " + to_string(lcdColour.getR()));
+
+		try
+		{
+			lcdIndividualColours = iniSettings[lcdSettings.section]["Individual"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("Individual " + lcdSettings.name + " Colours: " + (lcdIndividualColours ? "Enabled" : "Disabled"));
+
+		if (lcdIndividualColours)
+		{
+			string iniFileName = "LCDColours.ini";
+
+			try
+			{
+				iniFileName = iniSettings[lcdSettings.section]["Ini"].getString();
+			}
+			catch (exception ex) {}
+
+			lcdIndividualColours = lcdColourIni.load(basePath + iniFileName);
+
+			OutputGP4PPDebugString((lcdIndividualColours ? "Loaded " : "Failed to open ") + lcdSettings.name + " INI: " + iniFileName);
+		}
 	}
 
 	void ApplyPatches()
 	{
-		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled;
+		bool lcdColourEnabled = lcdIndividualColours || lcdColour.getColour() != 0;
+		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled;
 		bool externalEnabled = externalSettings.enabled || useCockpitMesh;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
 
@@ -2745,11 +2805,35 @@ namespace SteeringWheels
 
 				MemUtils::injectFunctionCall(lcdDrawCall, PtrToUlong(lcdDrawFunc), VAR_NAME(lcdDrawFunc));
 
+				if (lcdColourEnabled && checkCallBytes(lcdColourCall, lcdColourBytes, "CGP4LCD::Draw SetFontColour"))
+				{
+					// Every car starts from the default colour, the individual ones override it
+					for (int carIndex = 0; lcdIndividualColours && carIndex < numCars; carIndex++)
+					{
+						BGRA colour = lcdColour;
+
+						try
+						{
+							colour = lcdColourFromIni(lcdColourIni[lcdSettings.section + to_string(carIndex + 1)]["Colour"].getVectorAs<short>());
+						}
+						catch (exception ex) {}
+
+						lcdCarColours.push_back(colour.getColour());
+
+						OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " LCD colour " + to_string(colour.getB()) + ", " + to_string(colour.getG()) + ", " + to_string(colour.getR()));
+					}
+
+					MemUtils::injectFunctionCall(lcdColourCall, PtrToUlong(lcdSetFontColourFunc), VAR_NAME(lcdSetFontColourFunc));
+
+					lcdColourPatched = true;
+				}
+
 				cockpitPatched = true;
 			}
 		}
 
 		OutputGP4PPDebugString("External Steering Wheels patch : " + string(externalPatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit Steering Wheels and Dashes patch : " + string(cockpitPatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("Cockpit LCD colour patch : " + string(lcdColourPatched ? "Applied" : "Not applied"));
 	}
 };

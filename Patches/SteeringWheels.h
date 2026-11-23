@@ -5,7 +5,7 @@ using namespace IniLib;
 
 namespace SteeringWheels
 {
-	void LoadSettings(IniFile iniSettings);
+	void LoadSettings(IniFile iniSettings, std::string basePath);
 
 	void ApplyPatches();
 };

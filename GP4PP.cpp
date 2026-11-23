@@ -55,7 +55,7 @@ DWORD WINAPI MainThread(LPVOID param)
 		RearLight::LoadSettings(iniSettings);
 
 		// Load Steering Wheels Settings
-		SteeringWheels::LoadSettings(iniSettings);
+		SteeringWheels::LoadSettings(iniSettings, basePath);
 
 		//Initialize Tweaker Hook
 		Tweaker::Hook(iniSettings);

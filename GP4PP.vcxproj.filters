@@ -154,5 +154,8 @@
     <CopyFileToFolders Include="Ini\VisorColours.ini">
       <Filter>Ini</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="Ini\LCDColours.ini">
+      <Filter>Ini</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>
