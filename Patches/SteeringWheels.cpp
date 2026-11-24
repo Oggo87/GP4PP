@@ -85,6 +85,9 @@ namespace SteeringWheels
 	bool lcdColourPatched = false;
 	bool lcdScalePatched = false;
 	bool lcdFontPatched = false;
+	string lcdFontFile;
+	string lcdFontFace;
+	bool lcdCustomFont = false;				// FontFile registered and FontFace found
 
 	// Constants
 	const int NUM_COCKPIT_OBJECTS = 0x126;
@@ -124,9 +127,9 @@ namespace SteeringWheels
 	BYTE lcdColourBytes[] = { 0xe8, 0x49, 0xcc, 0xff, 0xff };
 	BYTE lcdScaleBytes[] = { 0xe8, 0x41, 0xcd, 0xff, 0xff };
 
-	// LanguageData::CreateFonts, TrueType branch: the LCD font's CGP4Font::Create pushes, one per language case
-	DWORD lcdFontSizePushes[] = { 0x0047685d, 0x00476ae9, 0x00476dd5, 0x00477384, 0x0047764a };		// 6a 10: push 16
-	DWORD lcdFontWeightPushes[] = { 0x00476841, 0x00476acd, 0x00476db9, 0x00477368, 0x0047762b };	// 68 bc 02 00 00: push 700
+	// LanguageData::CreateFonts: the LCD font (fonts_0x0[0]) calls, bitmap branch and the 6 TrueType language cases
+	DWORD lcdBitmapFontCall = 0x00476602;	// CGP4Font::CGP4Font(device, "digital.tga", 700, 0xff000000)
+	DWORD lcdTrueTypeFontCalls[] = { 0x00476862, 0x00476aee, 0x00476dda, 0x004770c2, 0x00477389, 0x0047764f };	// CGP4Font::Create(16, fonts, "dummy", "Arial", 'C', 700, 700, 0xff000000)
 
 	// DrawCarSteeringWheels instructions replaced by a jump, for the gloves and arms of the 3D external wheels
 	DWORD wheelIndexBlockAdd = 0x0048b4d3;		// add ecx, <offset of the last car's indices>, ecx = locked index buffer
@@ -184,6 +187,8 @@ namespace SteeringWheels
 	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
 	DWORD SetFontColour = 0x004778a0;		// LanguageData::SetFontColour?(int font, D3DCOLOR colour)
 	DWORD SetFontScale = 0x00477980;		// LanguageData::SetFontScale?(int font, float scaleY, float scaleX), scaleX 0 = scaleY
+	DWORD FontCreate = 0x00472100;			// CGP4Font::Create, TrueType font, RET 0x24
+	DWORD FontBitmapConstruct = 0x004754c0;	// CGP4Font::CGP4Font, .tga font, RET 0x10
 	DWORD GetTextureIndex = 0x00450710;
 	DWORD BackupTextureBasePath = 0x0044f5c0;
 	DWORD SetTextureBasePath = 0x0044f4f0;
@@ -216,6 +221,8 @@ namespace SteeringWheels
 	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
 	typedef void(__thiscall* SetFontColourType)(BYTE*, int, DWORD);
 	typedef void(__thiscall* SetFontScaleType)(BYTE*, int, float, float);
+	typedef BYTE*(__thiscall* FontCreateType)(BYTE*, BYTE*, int, BYTE*, BYTE*, BYTE*, int, int, int, DWORD);
+	typedef BYTE*(__thiscall* FontBitmapConstructType)(BYTE*, BYTE*, const char*, int, DWORD);
 	typedef int(__thiscall* GetTextureIndexType)(BYTE*, const char*, int, int, int, int, int, int);
 	typedef void(__thiscall* BackupTextureBasePathType)(BYTE*);
 	typedef void(__thiscall* SetTextureBasePathType)(BYTE*, const char*);
@@ -249,6 +256,8 @@ namespace SteeringWheels
 	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
 	SetFontColourType SetFontColourFunc = (SetFontColourType)SetFontColour;
 	SetFontScaleType SetFontScaleFunc = (SetFontScaleType)SetFontScale;
+	FontCreateType FontCreateFunc = (FontCreateType)FontCreate;
+	FontBitmapConstructType FontBitmapConstructFunc = (FontBitmapConstructType)FontBitmapConstruct;
 	GetTextureIndexType GetTextureIndexFunc = (GetTextureIndexType)GetTextureIndex;
 	BackupTextureBasePathType BackupTextureBasePathFunc = (BackupTextureBasePathType)BackupTextureBasePath;
 	SetTextureBasePathType SetTextureBasePathFunc = (SetTextureBasePathType)SetTextureBasePath;
@@ -1834,40 +1843,113 @@ namespace SteeringWheels
 		SetFontScaleFunc(language, font, scaleY / scale, scaleX / scale);
 	}
 
-	// TrueType LCD font size and weight, the same in all of CreateFonts' language cases
-	bool patchLcdFont()
+	// A 5-byte call at callAddress whose target is function
+	bool checkCallTarget(DWORD callAddress, DWORD function, const string& name)
 	{
-		BYTE sizeBytes[] = { 0x6a, (BYTE)GP4_LCD_FONT_SIZE };
-		BYTE weightBytes[] = { 0x68, 0xbc, 0x02, 0x00, 0x00 };
+		BYTE* call = MemUtils::addressToPtr<BYTE>(callAddress);
 
-		for (int i = 0; i < 5; i++)
+		if (call[0] == 0xe8 && callAddress + 5 + *(DWORD*)(call + 1) == function)
 		{
-			if (memcmp(MemUtils::addressToPtr<BYTE>(lcdFontSizePushes[i]), sizeBytes, sizeof(sizeBytes)) != 0
-				|| memcmp(MemUtils::addressToPtr<BYTE>(lcdFontWeightPushes[i]), weightBytes, sizeof(weightBytes)) != 0)
-			{
-				OutputGP4PPDebugString("Steering Wheels: unexpected bytes in LanguageData::CreateFonts, LCD font not patched");
-
-				return false;
-			}
+			return true;
 		}
 
-		BYTE size = (BYTE)lcdFontSize;
-		DWORD weight = (DWORD)lcdFontWeight;
+		OutputGP4PPDebugString("Steering Wheels: unexpected bytes at " + name + ", not patched");
 
-		for (int i = 0; i < 5; i++)
+		return false;
+	}
+
+	// Registers FontFile for GP4 only, and checks Windows finds FontFace in it
+	bool registerLcdFont()
+	{
+		// GP4's fonts folder, next to GP4.exe: GP4PP.dll and its ini can live elsewhere
+		char exePath[MAX_PATH] = "";
+
+		GetModuleFileNameA(NULL, exePath, MAX_PATH);
+
+		string gp4Folder = exePath;
+		gp4Folder = gp4Folder.substr(0, gp4Folder.find_last_of("\\/") + 1);
+
+		string path = gp4Folder + "fonts\\" + lcdFontFile;
+
+		if (AddFontResourceExA(path.c_str(), FR_PRIVATE, 0) == 0)
 		{
-			if (lcdFontSize != GP4_LCD_FONT_SIZE)
-			{
-				MemUtils::patchAddress((LPVOID)(lcdFontSizePushes[i] + 1), &size, sizeof(size));
-			}
+			OutputGP4PPDebugString("Steering Wheels: LCD font not loaded [" + path + "]");
 
-			if (lcdFontWeight != GP4_LCD_FONT_WEIGHT)
-			{
-				MemUtils::patchAddress((LPVOID)(lcdFontWeightPushes[i] + 1), (BYTE*)&weight, sizeof(weight));
-			}
+			return false;
 		}
 
-		return true;
+		// Windows silently substitutes another font for an unknown face: compare the face it picks
+		HDC dc = CreateCompatibleDC(NULL);
+		HFONT font = CreateFontA(-16, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, lcdFontFace.c_str());
+		HGDIOBJ old = SelectObject(dc, font);
+		char face[LF_FACESIZE] = "";
+
+		GetTextFaceA(dc, LF_FACESIZE, face);
+		SelectObject(dc, old);
+		DeleteObject(font);
+		DeleteDC(dc);
+
+		bool found = _stricmp(face, lcdFontFace.c_str()) == 0;
+
+		OutputGP4PPDebugString("Steering Wheels: LCD font " + (found ? string("loaded") : "face not found, Windows uses " + string(face)) + " [" + path + ", " + lcdFontFace + "]");
+
+		if (!found)
+		{
+			RemoveFontResourceExA(path.c_str(), FR_PRIVATE, 0);
+		}
+
+		return found;
+	}
+
+	BYTE* createLcdTrueTypeFont(BYTE* font, BYTE* device, BYTE* folder, BYTE* fileName, BYTE* faceName, int unusedLetter, int maxChars, DWORD colour)
+	{
+		BYTE allocator = 0;
+		BYTE customFace[STRING_SIZE];
+
+		if (lcdCustomFont)
+		{
+			StringConstructFunc(customFace, lcdFontFace.c_str(), &allocator);
+		}
+
+		BYTE* result = FontCreateFunc(font, device, lcdFontSize, folder, fileName, lcdCustomFont ? customFace : faceName, unusedLetter, maxChars, lcdFontWeight, colour);
+
+		if (lcdCustomFont)
+		{
+			StringDestructFunc(customFace);
+		}
+
+		return result;
+	}
+
+	// Replaces the 6 TrueType LCD font calls: thiscall with 9 stack arguments, matched by __fastcall
+	BYTE* __fastcall lcdTrueTypeFontFunc(BYTE* font, void* /*edx*/, BYTE* device, int /*fontSize*/, BYTE* folder, BYTE* fileName, BYTE* faceName, int unusedLetter, int maxChars, int /*weight*/, DWORD colour)
+	{
+		return createLcdTrueTypeFont(font, device, folder, fileName, faceName, unusedLetter, maxChars, colour);
+	}
+
+	// Replaces the bitmap LCD font call (GP4's TrueType fonts off): thiscall with 4 stack arguments, matched by __fastcall.
+	// Both fonts are built in the same HeapAlloc(0xb30) block, so the custom TrueType font takes the bitmap one's place
+	BYTE* __fastcall lcdBitmapFontFunc(BYTE* font, void* /*edx*/, BYTE* device, const char* textureName, int maxChars, DWORD colour)
+	{
+		if (!lcdCustomFont)
+		{
+			return FontBitmapConstructFunc(font, device, textureName, maxChars, colour);
+		}
+
+		// Same folder and file name GP4's TrueType branch passes: there is no fonts\dummy.ttf, so Create registers nothing itself
+		BYTE allocator = 0;
+		BYTE folder[STRING_SIZE];
+		BYTE fileName[STRING_SIZE];
+
+		StringConstructFunc(folder, "fonts", &allocator);
+		StringConstructFunc(fileName, "dummy", &allocator);
+
+		BYTE* result = createLcdTrueTypeFont(font, device, folder, fileName, NULL, 'C', maxChars, colour);
+
+		StringDestructFunc(fileName);
+		StringDestructFunc(folder);
+
+		return result;
 	}
 
 	void __fastcall lcdDrawFunc(BYTE* lcd, void* /*edx*/)
@@ -2801,6 +2883,22 @@ namespace SteeringWheels
 
 		try
 		{
+			lcdFontFile = iniSettings[lcdSettings.section]["FontFile"].getString();
+		}
+		catch (exception ex) {}
+
+		try
+		{
+			lcdFontFace = iniSettings[lcdSettings.section]["FontFace"].getString();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString(lcdSettings.name + " Font: " + (lcdFontFile.empty() || lcdFontFace.empty() ? string("GP4's") : lcdFontFile + ", " + lcdFontFace));
+
+		lcdCustomFont = !lcdFontFile.empty() && !lcdFontFace.empty() && registerLcdFont();
+
+		try
+		{
 			lcdScale = iniSettings[lcdSettings.section]["Scale"].getAs<float>();
 		}
 		catch (exception ex) {}
@@ -2854,10 +2952,30 @@ namespace SteeringWheels
 		bool externalEnabled = externalSettings.enabled || useCockpitMesh;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
 
-		// TrueType LCD font: created by GP4 after this, in D3D_Init and on every language change
-		if (lcdFontSize != GP4_LCD_FONT_SIZE || lcdFontWeight != GP4_LCD_FONT_WEIGHT)
+		// LCD font: GP4 creates it after this, in D3D_Init and on every language change
+		if (lcdCustomFont || lcdFontSize != GP4_LCD_FONT_SIZE || lcdFontWeight != GP4_LCD_FONT_WEIGHT)
 		{
-			lcdFontPatched = patchLcdFont();
+			bool callsFound = !lcdCustomFont || checkCallTarget(lcdBitmapFontCall, FontBitmapConstruct, "CGP4Font::CGP4Font call");
+
+			for (int i = 0; callsFound && i < 6; i++)
+			{
+				callsFound = checkCallTarget(lcdTrueTypeFontCalls[i], FontCreate, "CGP4Font::Create call");
+			}
+
+			if (callsFound)
+			{
+				if (lcdCustomFont)
+				{
+					MemUtils::injectFunctionCall(lcdBitmapFontCall, PtrToUlong(lcdBitmapFontFunc), VAR_NAME(lcdBitmapFontFunc));
+				}
+
+				for (int i = 0; i < 6; i++)
+				{
+					MemUtils::injectFunctionCall(lcdTrueTypeFontCalls[i], PtrToUlong(lcdTrueTypeFontFunc), VAR_NAME(lcdTrueTypeFontFunc));
+				}
+
+				lcdFontPatched = true;
+			}
 		}
 
 		// External steering wheels: texture loading, render and stage flush calls
@@ -2976,6 +3094,6 @@ namespace SteeringWheels
 		OutputGP4PPDebugString("Cockpit Steering Wheels and Dashes patch : " + string(cockpitPatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit LCD colour patch : " + string(lcdColourPatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit LCD scale patch : " + string(lcdScalePatched ? "Applied" : "Not applied"));
-		OutputGP4PPDebugString("Cockpit LCD TrueType font patch : " + string(lcdFontPatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("Cockpit LCD font patch : " + string(lcdFontPatched ? "Applied" : "Not applied"));
 	}
 };

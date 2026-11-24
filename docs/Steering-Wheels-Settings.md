@@ -38,6 +38,8 @@ PerWheel = false
 AutoName = true
 FileName = 
 AlwaysShow = false
+FontFile = 
+FontFace = 
 FontSize = 16
 FontWeight = 700
 Scale = 1.0
@@ -145,9 +147,25 @@ The files are read once per session, the first time the LCD is drawn. The log li
 
 When enabled, the LCD is also shown on cockpit steering wheels that have no `LCD` object, in the same place as on the default steering wheel. When disabled (default), the LCD is only shown on steering wheels that have an `LCD` object.
 
-### FontSize and FontWeight
+### FontFile, FontFace, FontSize and FontWeight
 
-The size and weight of the TrueType font GP4 uses for the LCD text, for all cars. They only have an effect when GP4's TrueType fonts option is enabled: by default, GP4 draws the LCD text with its own bitmap font, `digital.tga`, which has a fixed size and weight. `FontSize` is the size of the font, from 1 to 23 (GP4's default is 16; larger sizes crash GP4); `FontWeight` is its thickness, from 1 to 1000 (400 is normal, 700 is bold, GP4's default). Values outside these ranges are ignored and GP4's are used instead. GP4's defaults leave GP4's code untouched. To change the size of the text on the steering wheel, with either font, use [`Scale`](#Colour-Scale-Individual-and-Ini).
+The font of the LCD text, for all cars. By default, GP4 draws the LCD text with its own bitmap font, `digital.tga`, or with Arial when GP4's TrueType fonts option is enabled.
+
+`FontFile` and `FontFace` set a custom TrueType font for the LCD text. `FontFile` is the name of the `.ttf` file, placed in GP4's `fonts` folder on disk (never in a WAD), and `FontFace` is the name of the font inside the file, as shown at the top of the Windows font viewer when the file is opened (not the file name). When both are set, the LCD text always uses this font, whether GP4's TrueType fonts option is enabled or not. The font is only made available to GP4, it is not installed in Windows. GP4's other texts keep their own fonts. If the file cannot be loaded, or Windows does not find `FontFace` in it, GP4's own font is used and the log says why.
+
+`FontSize` and `FontWeight` are the size and weight of the TrueType LCD font: the custom one, or Arial when GP4's TrueType fonts option is enabled. They have no effect on `digital.tga`. `FontSize` is the size of the font, from 1 to 23 (GP4's default is 16; larger sizes crash GP4, and a wide font may need a smaller size); `FontWeight` is its thickness, from 1 to 1000 (400 is normal, 700 is bold, GP4's default). Values outside these ranges are ignored and GP4's are used instead. GP4's defaults leave GP4's code untouched. To change the size of the text on the steering wheel, with any font, use [`Scale`](#Colour-Scale-Individual-and-Ini).
+
+GP4 only draws the characters 0 to 255 of a font (the Western European ones). The LCD text positions were made for GP4's own font, so a custom font may need its own [positions](#CockpitLCD).
+
+Example - A custom LCD font, slightly thinner than GP4's
+
+```ini
+[CockpitLCD]
+FontFile = MyLcdFont.ttf
+FontFace = My LCD Font
+FontSize = 16
+FontWeight = 400
+```
 
 ### Colour, Scale, Individual and Ini
 
