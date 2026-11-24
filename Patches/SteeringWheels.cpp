@@ -76,6 +76,8 @@ namespace SteeringWheels
 	float lcdScale = 1.0f;					// multiplier on GP4's LCD text scale
 	const int GP4_LCD_FONT_SIZE = 16;
 	const int GP4_LCD_FONT_WEIGHT = 700;
+	const int GP4_MAX_LCD_FONT_SIZE = 23;	// without the glyph page fix
+	const int MAX_LCD_FONT_SIZE = 32;		// with it: 4 pages of (256 / size)^2 glyphs, 8x cells within the 256 px DIB
 	int lcdFontSize = GP4_LCD_FONT_SIZE;
 	int lcdFontWeight = GP4_LCD_FONT_WEIGHT;
 	bool lcdIndividual = false;
@@ -88,6 +90,7 @@ namespace SteeringWheels
 	string lcdFontFile;
 	string lcdFontFace;
 	bool lcdCustomFont = false;				// FontFile registered and FontFace found
+	bool glyphPagePatched = false;
 
 	// Constants
 	const int NUM_COCKPIT_OBJECTS = 0x126;
@@ -130,6 +133,12 @@ namespace SteeringWheels
 	// LanguageData::CreateFonts: the LCD font (fonts_0x0[0]) calls, bitmap branch and the 6 TrueType language cases
 	DWORD lcdBitmapFontCall = 0x00476602;	// CGP4Font::CGP4Font(device, "digital.tga", 700, 0xff000000)
 	DWORD lcdTrueTypeFontCalls[] = { 0x00476862, 0x00476aee, 0x00476dda, 0x004770c2, 0x00477389, 0x0047764f };	// CGP4Font::Create(16, fonts, "dummy", "Arial", 'C', 700, 700, 0xff000000)
+
+	// CGP4Font::Create: BuildGlyphPage?'s charCount is 0xff instead of glyphsPerPage, so page 0 takes chars 0..254 and,
+	// from about size 24, writes past its texture (Ghidra notes B4). Pushing glyphsPerPage (already in edx) fixes it up to size 32
+	DWORD glyphPageCharCountPush = 0x004725a0;
+	BYTE glyphPageCharCountBytes[] = { 0x68, 0xff, 0x00, 0x00, 0x00 };		// push 0xff
+	BYTE glyphPageCharCountPatch[] = { 0x52, 0x90, 0x90, 0x90, 0x90 };		// push edx
 
 	// DrawCarSteeringWheels instructions replaced by a jump, for the gloves and arms of the 3D external wheels
 	DWORD wheelIndexBlockAdd = 0x0048b4d3;		// add ecx, <offset of the last car's indices>, ecx = locked index buffer
@@ -2856,8 +2865,8 @@ namespace SteeringWheels
 		}
 		catch (exception ex) {}
 
-		// GP4 crashes with TrueType LCD fonts larger than 23 (found in-game, cause not yet known)
-		if (lcdFontSize < 1 || lcdFontSize > 23)
+		// 24-32 need the glyph page fix, applied in ApplyPatches
+		if (lcdFontSize < 1 || lcdFontSize > MAX_LCD_FONT_SIZE)
 		{
 			OutputGP4PPDebugString("Invalid " + lcdSettings.name + " FontSize " + to_string(lcdFontSize) + ", using GP4's");
 
@@ -2955,6 +2964,23 @@ namespace SteeringWheels
 		// LCD font: GP4 creates it after this, in D3D_Init and on every language change
 		if (lcdCustomFont || lcdFontSize != GP4_LCD_FONT_SIZE || lcdFontWeight != GP4_LCD_FONT_WEIGHT)
 		{
+			// Sizes GP4 cannot build without overflowing its glyph texture
+			if (lcdFontSize > GP4_MAX_LCD_FONT_SIZE)
+			{
+				if (memcmp(MemUtils::addressToPtr<BYTE>(glyphPageCharCountPush), glyphPageCharCountBytes, sizeof(glyphPageCharCountBytes)) == 0)
+				{
+					MemUtils::patchAddress((LPVOID)glyphPageCharCountPush, glyphPageCharCountPatch, sizeof(glyphPageCharCountPatch));
+
+					glyphPagePatched = true;
+				}
+				else
+				{
+					OutputGP4PPDebugString("Steering Wheels: unexpected bytes in CGP4Font::Create, LCD FontSize " + to_string(lcdFontSize) + " limited to " + to_string(GP4_MAX_LCD_FONT_SIZE));
+
+					lcdFontSize = GP4_MAX_LCD_FONT_SIZE;
+				}
+			}
+
 			bool callsFound = !lcdCustomFont || checkCallTarget(lcdBitmapFontCall, FontBitmapConstruct, "CGP4Font::CGP4Font call");
 
 			for (int i = 0; callsFound && i < 6; i++)
@@ -3095,5 +3121,6 @@ namespace SteeringWheels
 		OutputGP4PPDebugString("Cockpit LCD colour patch : " + string(lcdColourPatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit LCD scale patch : " + string(lcdScalePatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit LCD font patch : " + string(lcdFontPatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("Font glyph page fix : " + string(glyphPagePatched ? "Applied" : "Not applied"));
 	}
 };
