@@ -38,9 +38,12 @@ PerWheel = false
 AutoName = true
 FileName = 
 AlwaysShow = false
+FontSize = 16
+FontWeight = 700
+Scale = 1.0
 Individual = false
 Colour = 0, 0, 0
-Ini = LCDColours.ini
+Ini = LCD.ini
 ```
 
 All sections work the same way and are independent of each other. All are disabled by default, and GP4's own steering wheels and dash are used.
@@ -142,24 +145,30 @@ The files are read once per session, the first time the LCD is drawn. The log li
 
 When enabled, the LCD is also shown on cockpit steering wheels that have no `LCD` object, in the same place as on the default steering wheel. When disabled (default), the LCD is only shown on steering wheels that have an `LCD` object.
 
-### Colour, Individual and Ini
+### FontSize and FontWeight
 
-The colour of the LCD text works like the [visor colours](Visor-Settings.md), and does not need any of the settings above to be enabled. `Colour` is the LCD text colour, in `0-255 BGR` format, for all cars (unlike the visors, there is no alpha: GP4 draws the LCD text opaque). The default, `0, 0, 0`, is GP4's own black, and leaves GP4's code untouched.
+The size and weight of the TrueType font GP4 uses for the LCD text, for all cars. They only have an effect when GP4's TrueType fonts option is enabled: by default, GP4 draws the LCD text with its own bitmap font, `digital.tga`, which has a fixed size and weight. `FontSize` is the size of the font, from 1 to 23 (GP4's default is 16; larger sizes crash GP4); `FontWeight` is its thickness, from 1 to 1000 (400 is normal, 700 is bold, GP4's default). Values outside these ranges are ignored and GP4's are used instead. GP4's defaults leave GP4's code untouched. To change the size of the text on the steering wheel, with either font, use [`Scale`](#Colour-Scale-Individual-and-Ini).
 
-When `Individual` is enabled, each car can have its own colour, in the INI file named by `Ini` (default `LCDColours.ini`), located in the same folder as the main `GP4PP.ini` file. It contains one section per car, named sequentially `CockpitLCD1` to `CockpitLCD22` (as `{driverindex}`), each with its own `Colour` entry. Cars without an entry use `Colour` from the `CockpitLCD` section. The colour is the one of the car whose cockpit is viewed.
+### Colour, Scale, Individual and Ini
 
-Example - Yellow LCD text for the first Ferrari, GP4's black for all the other cars
+The colour and size of the LCD text work like the [visor colours](Visor-Settings.md), and do not need any of the settings above to be enabled. `Colour` is the LCD text colour, in `0-255 BGR` format, for all cars (unlike the visors, there is no alpha: GP4 draws the LCD text opaque). The default, `0, 0, 0`, is GP4's own black. `Scale` multiplies the size of the LCD text, for all cars: `1.0` (default) is GP4's own size, `0.8` is 20% smaller, `2.0` is twice as large. Values of 0 or less are ignored and `1.0` is used instead. The defaults leave GP4's code untouched.
+
+When `Individual` is enabled, each car can have its own colour and scale, in the INI file named by `Ini` (default `LCD.ini`), located in the same folder as the main `GP4PP.ini` file. It contains one section per car, named sequentially `CockpitLCD1` to `CockpitLCD22` (as `{driverindex}`), each with its own `Colour` and `Scale` entries. Cars without an entry use `Colour` and `Scale` from the `CockpitLCD` section. The colour and scale are the ones of the car whose cockpit is viewed.
+
+Example - Yellow, 20% smaller LCD text for the first Ferrari, GP4's own for all the other cars
 
 ```ini
 [CockpitLCD]
 Individual = true
 Colour = 0, 0, 0
-Ini = LCDColours.ini
+Scale = 1.0
+Ini = LCD.ini
 ```
 
 ```ini
 [CockpitLCD1]
 Colour = 15, 236, 250
+Scale = 0.8
 ```
 
 ## Textures used by a cockpit mesh

@@ -73,10 +73,18 @@ namespace SteeringWheels
 	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
 	BGRA lcdColour = { 0, 0, 0, 0 };		// GP4's own: black
-	bool lcdIndividualColours = false;
-	IniFile lcdColourIni;					// per-car sections, read once the car count is known
+	float lcdScale = 1.0f;					// multiplier on GP4's LCD text scale
+	const int GP4_LCD_FONT_SIZE = 16;
+	const int GP4_LCD_FONT_WEIGHT = 700;
+	int lcdFontSize = GP4_LCD_FONT_SIZE;
+	int lcdFontWeight = GP4_LCD_FONT_WEIGHT;
+	bool lcdIndividual = false;
+	IniFile lcdIni;							// per-car sections, read once the car count is known
 	vector<DWORD> lcdCarColours;
+	vector<float> lcdCarScales;
 	bool lcdColourPatched = false;
+	bool lcdScalePatched = false;
+	bool lcdFontPatched = false;
 
 	// Constants
 	const int NUM_COCKPIT_OBJECTS = 0x126;
@@ -103,6 +111,7 @@ namespace SteeringWheels
 	DWORD cockpitDestructorCall = 0x00498074;
 	DWORD lcdDrawCall = 0x0049cfa6;
 	DWORD lcdColourCall = 0x0047ac52;		// CGP4LCD::Draw: call SetFontColour?(0, 0)
+	DWORD lcdScaleCall = 0x0047ac3a;		// CGP4LCD::Draw: call SetFontScale?(0, 4.8f, 0)
 
 	// Original bytes of the call instructions above, checked before patching
 	BYTE initCarSteeringWheelsBytes[] = { 0xe8, 0x9d, 0xda, 0xff, 0xff };
@@ -113,6 +122,11 @@ namespace SteeringWheels
 	BYTE cockpitDestructorBytes[] = { 0xe8, 0xc7, 0x74, 0xfd, 0xff };
 	BYTE lcdDrawBytes[] = { 0xe8, 0x65, 0xdc, 0xfd, 0xff };
 	BYTE lcdColourBytes[] = { 0xe8, 0x49, 0xcc, 0xff, 0xff };
+	BYTE lcdScaleBytes[] = { 0xe8, 0x41, 0xcd, 0xff, 0xff };
+
+	// LanguageData::CreateFonts, TrueType branch: the LCD font's CGP4Font::Create pushes, one per language case
+	DWORD lcdFontSizePushes[] = { 0x0047685d, 0x00476ae9, 0x00476dd5, 0x00477384, 0x0047764a };		// 6a 10: push 16
+	DWORD lcdFontWeightPushes[] = { 0x00476841, 0x00476acd, 0x00476db9, 0x00477368, 0x0047762b };	// 68 bc 02 00 00: push 700
 
 	// DrawCarSteeringWheels instructions replaced by a jump, for the gloves and arms of the 3D external wheels
 	DWORD wheelIndexBlockAdd = 0x0048b4d3;		// add ecx, <offset of the last car's indices>, ecx = locked index buffer
@@ -169,6 +183,7 @@ namespace SteeringWheels
 	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
 	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
 	DWORD SetFontColour = 0x004778a0;		// LanguageData::SetFontColour?(int font, D3DCOLOR colour)
+	DWORD SetFontScale = 0x00477980;		// LanguageData::SetFontScale?(int font, float scaleY, float scaleX), scaleX 0 = scaleY
 	DWORD GetTextureIndex = 0x00450710;
 	DWORD BackupTextureBasePath = 0x0044f5c0;
 	DWORD SetTextureBasePath = 0x0044f4f0;
@@ -200,6 +215,7 @@ namespace SteeringWheels
 	typedef void(__thiscall* StringDestructType)(BYTE*);
 	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
 	typedef void(__thiscall* SetFontColourType)(BYTE*, int, DWORD);
+	typedef void(__thiscall* SetFontScaleType)(BYTE*, int, float, float);
 	typedef int(__thiscall* GetTextureIndexType)(BYTE*, const char*, int, int, int, int, int, int);
 	typedef void(__thiscall* BackupTextureBasePathType)(BYTE*);
 	typedef void(__thiscall* SetTextureBasePathType)(BYTE*, const char*);
@@ -232,6 +248,7 @@ namespace SteeringWheels
 	StringDestructType StringDestructFunc = (StringDestructType)StringDestruct;
 	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
 	SetFontColourType SetFontColourFunc = (SetFontColourType)SetFontColour;
+	SetFontScaleType SetFontScaleFunc = (SetFontScaleType)SetFontScale;
 	GetTextureIndexType GetTextureIndexFunc = (GetTextureIndexType)GetTextureIndex;
 	BackupTextureBasePathType BackupTextureBasePathFunc = (BackupTextureBasePathType)BackupTextureBasePath;
 	SetTextureBasePathType SetTextureBasePathFunc = (SetTextureBasePathType)SetTextureBasePath;
@@ -1807,6 +1824,52 @@ namespace SteeringWheels
 		SetFontColourFunc(language, font, colour);
 	}
 
+	// Replaces CGP4LCD::Draw's SetFontScale?(font, 4.8f, 0) call: thiscall with 3 stack arguments, matched by __fastcall
+	void __fastcall lcdSetFontScaleFunc(BYTE* language, void* /*edx*/, int font, float scaleY, float scaleX)
+	{
+		int car = viewedCar();
+		float scale = (car >= 0 && car < (int)lcdCarScales.size()) ? lcdCarScales[car] : lcdScale;
+
+		// GP4's scale divides the text size: a larger Scale is a smaller value. scaleX 0 (same as scaleY) stays 0
+		SetFontScaleFunc(language, font, scaleY / scale, scaleX / scale);
+	}
+
+	// TrueType LCD font size and weight, the same in all of CreateFonts' language cases
+	bool patchLcdFont()
+	{
+		BYTE sizeBytes[] = { 0x6a, (BYTE)GP4_LCD_FONT_SIZE };
+		BYTE weightBytes[] = { 0x68, 0xbc, 0x02, 0x00, 0x00 };
+
+		for (int i = 0; i < 5; i++)
+		{
+			if (memcmp(MemUtils::addressToPtr<BYTE>(lcdFontSizePushes[i]), sizeBytes, sizeof(sizeBytes)) != 0
+				|| memcmp(MemUtils::addressToPtr<BYTE>(lcdFontWeightPushes[i]), weightBytes, sizeof(weightBytes)) != 0)
+			{
+				OutputGP4PPDebugString("Steering Wheels: unexpected bytes in LanguageData::CreateFonts, LCD font not patched");
+
+				return false;
+			}
+		}
+
+		BYTE size = (BYTE)lcdFontSize;
+		DWORD weight = (DWORD)lcdFontWeight;
+
+		for (int i = 0; i < 5; i++)
+		{
+			if (lcdFontSize != GP4_LCD_FONT_SIZE)
+			{
+				MemUtils::patchAddress((LPVOID)(lcdFontSizePushes[i] + 1), &size, sizeof(size));
+			}
+
+			if (lcdFontWeight != GP4_LCD_FONT_WEIGHT)
+			{
+				MemUtils::patchAddress((LPVOID)(lcdFontWeightPushes[i] + 1), (BYTE*)&weight, sizeof(weight));
+			}
+		}
+
+		return true;
+	}
+
 	void __fastcall lcdDrawFunc(BYTE* lcd, void* /*edx*/)
 	{
 		BYTE* cockpit = MemUtils::addressToValue<BYTE*>(cockpitPointer);
@@ -2707,7 +2770,53 @@ namespace SteeringWheels
 
 		try
 		{
-			lcdColour = lcdColourFromIni(iniSettings[lcdSettings.section]["Colour"].getVectorAs<short>());
+			lcdFontSize = iniSettings[lcdSettings.section]["FontSize"].getAs<int>();
+		}
+		catch (exception ex) {}
+
+		// GP4 crashes with TrueType LCD fonts larger than 23 (found in-game, cause not yet known)
+		if (lcdFontSize < 1 || lcdFontSize > 23)
+		{
+			OutputGP4PPDebugString("Invalid " + lcdSettings.name + " FontSize " + to_string(lcdFontSize) + ", using GP4's");
+
+			lcdFontSize = GP4_LCD_FONT_SIZE;
+		}
+
+		OutputGP4PPDebugString(lcdSettings.name + " FontSize: " + to_string(lcdFontSize));
+
+		try
+		{
+			lcdFontWeight = iniSettings[lcdSettings.section]["FontWeight"].getAs<int>();
+		}
+		catch (exception ex) {}
+
+		if (lcdFontWeight < 1 || lcdFontWeight > 1000)
+		{
+			OutputGP4PPDebugString("Invalid " + lcdSettings.name + " FontWeight " + to_string(lcdFontWeight) + ", using GP4's");
+
+			lcdFontWeight = GP4_LCD_FONT_WEIGHT;
+		}
+
+		OutputGP4PPDebugString(lcdSettings.name + " FontWeight: " + to_string(lcdFontWeight));
+
+		try
+		{
+			lcdScale = iniSettings[lcdSettings.section]["Scale"].getAs<float>();
+		}
+		catch (exception ex) {}
+
+		if (!(lcdScale > 0.0f))
+		{
+			OutputGP4PPDebugString("Invalid " + lcdSettings.name + " Scale " + to_string(lcdScale) + ", using default");
+
+			lcdScale = 1.0f;
+		}
+
+		OutputGP4PPDebugString(lcdSettings.name + " Scale: " + to_string(lcdScale));
+
+		try
+		{
+			lcdColour =lcdColourFromIni(iniSettings[lcdSettings.section]["Colour"].getVectorAs<short>());
 		}
 		catch (exception ex) {}
 
@@ -2715,15 +2824,15 @@ namespace SteeringWheels
 
 		try
 		{
-			lcdIndividualColours = iniSettings[lcdSettings.section]["Individual"].getAs<bool>();
+			lcdIndividual = iniSettings[lcdSettings.section]["Individual"].getAs<bool>();
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("Individual " + lcdSettings.name + " Colours: " + (lcdIndividualColours ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("Individual " + lcdSettings.name + ": " + (lcdIndividual ? "Enabled" : "Disabled"));
 
-		if (lcdIndividualColours)
+		if (lcdIndividual)
 		{
-			string iniFileName = "LCDColours.ini";
+			string iniFileName = "LCD.ini";
 
 			try
 			{
@@ -2731,18 +2840,25 @@ namespace SteeringWheels
 			}
 			catch (exception ex) {}
 
-			lcdIndividualColours = lcdColourIni.load(basePath + iniFileName);
+			lcdIndividual = lcdIni.load(basePath + iniFileName);
 
-			OutputGP4PPDebugString((lcdIndividualColours ? "Loaded " : "Failed to open ") + lcdSettings.name + " INI: " + iniFileName);
+			OutputGP4PPDebugString((lcdIndividual ? "Loaded " : "Failed to open ") + lcdSettings.name + " INI: " + iniFileName);
 		}
 	}
 
 	void ApplyPatches()
 	{
-		bool lcdColourEnabled = lcdIndividualColours || lcdColour.getColour() != 0;
-		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled;
+		bool lcdColourEnabled = lcdIndividual || lcdColour.getColour() != 0;
+		bool lcdScaleEnabled = lcdIndividual || lcdScale != 1.0f;
+		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled || lcdScaleEnabled;
 		bool externalEnabled = externalSettings.enabled || useCockpitMesh;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
+
+		// TrueType LCD font: created by GP4 after this, in D3D_Init and on every language change
+		if (lcdFontSize != GP4_LCD_FONT_SIZE || lcdFontWeight != GP4_LCD_FONT_WEIGHT)
+		{
+			lcdFontPatched = patchLcdFont();
+		}
 
 		// External steering wheels: texture loading, render and stage flush calls
 		if (externalEnabled && countsRead)
@@ -2805,27 +2921,51 @@ namespace SteeringWheels
 
 				MemUtils::injectFunctionCall(lcdDrawCall, PtrToUlong(lcdDrawFunc), VAR_NAME(lcdDrawFunc));
 
-				if (lcdColourEnabled && checkCallBytes(lcdColourCall, lcdColourBytes, "CGP4LCD::Draw SetFontColour"))
+				bool colourHook = lcdColourEnabled && checkCallBytes(lcdColourCall, lcdColourBytes, "CGP4LCD::Draw SetFontColour");
+				bool scaleHook = lcdScaleEnabled && checkCallBytes(lcdScaleCall, lcdScaleBytes, "CGP4LCD::Draw SetFontScale");
+
+				// Every car starts from the defaults, the individual entries override them
+				for (int carIndex = 0; lcdIndividual && (colourHook || scaleHook) && carIndex < numCars; carIndex++)
 				{
-					// Every car starts from the default colour, the individual ones override it
-					for (int carIndex = 0; lcdIndividualColours && carIndex < numCars; carIndex++)
+					string section = lcdSettings.section + to_string(carIndex + 1);
+					BGRA colour = lcdColour;
+					float scale = lcdScale;
+
+					try
 					{
-						BGRA colour = lcdColour;
+						colour = lcdColourFromIni(lcdIni[section]["Colour"].getVectorAs<short>());
+					}
+					catch (exception ex) {}
 
-						try
-						{
-							colour = lcdColourFromIni(lcdColourIni[lcdSettings.section + to_string(carIndex + 1)]["Colour"].getVectorAs<short>());
-						}
-						catch (exception ex) {}
+					try
+					{
+						scale = lcdIni[section]["Scale"].getAs<float>();
+					}
+					catch (exception ex) {}
 
-						lcdCarColours.push_back(colour.getColour());
-
-						OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " LCD colour " + to_string(colour.getB()) + ", " + to_string(colour.getG()) + ", " + to_string(colour.getR()));
+					if (!(scale > 0.0f))
+					{
+						scale = lcdScale;
 					}
 
+					lcdCarColours.push_back(colour.getColour());
+					lcdCarScales.push_back(scale);
+
+					OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " LCD colour " + to_string(colour.getB()) + ", " + to_string(colour.getG()) + ", " + to_string(colour.getR()) + ", scale " + to_string(scale));
+				}
+
+				if (colourHook)
+				{
 					MemUtils::injectFunctionCall(lcdColourCall, PtrToUlong(lcdSetFontColourFunc), VAR_NAME(lcdSetFontColourFunc));
 
 					lcdColourPatched = true;
+				}
+
+				if (scaleHook)
+				{
+					MemUtils::injectFunctionCall(lcdScaleCall, PtrToUlong(lcdSetFontScaleFunc), VAR_NAME(lcdSetFontScaleFunc));
+
+					lcdScalePatched = true;
 				}
 
 				cockpitPatched = true;
@@ -2835,5 +2975,7 @@ namespace SteeringWheels
 		OutputGP4PPDebugString("External Steering Wheels patch : " + string(externalPatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit Steering Wheels and Dashes patch : " + string(cockpitPatched ? "Applied" : "Not applied"));
 		OutputGP4PPDebugString("Cockpit LCD colour patch : " + string(lcdColourPatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("Cockpit LCD scale patch : " + string(lcdScalePatched ? "Applied" : "Not applied"));
+		OutputGP4PPDebugString("Cockpit LCD TrueType font patch : " + string(lcdFontPatched ? "Applied" : "Not applied"));
 	}
 };

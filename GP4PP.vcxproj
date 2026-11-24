@@ -149,7 +149,7 @@
     <CopyFileToFolders Include="Ini\VisorColours.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="Ini\LCDColours.ini">
+    <CopyFileToFolders Include="Ini\LCD.ini">
       <FileType>Document</FileType>
     </CopyFileToFolders>
     <None Include="docs\Assets-Settings.md" />
