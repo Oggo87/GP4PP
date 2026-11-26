@@ -18,6 +18,7 @@ AutoName = true
 FileName = 
 UseCockpitMesh = false
 CockpitMeshScale = 0.7
+ShowLCD = false
 
 [CockpitSteeringWheels]
 PerTeam = false
@@ -80,7 +81,7 @@ When enabled, the external steering wheels are drawn in 3D with the cockpit stee
 * warning lights (`Warning_left_front_tyre_1` and the other tyre, wing and plank warnings)
 * pit lights (`Pit_1` for the car's own pit light, `Pit_2` for its team-mate's in a race)
 
-These work the same way they do in the cockpit view. As in the cockpit view, the off state objects of the aids, rev lights, flags, pit and opposition spread displays are never shown. Only objects that are part of the steering wheel mesh are shown, so for example a gear display that is part of the dash mesh is not. The log lists how many objects of each display a steering wheel mesh has. Other displays (suggested gear, aids, LEDs, opposition spread), mirrors and the LCD are not shown.
+These work the same way they do in the cockpit view. As in the cockpit view, the off state objects of the aids, rev lights, flags, pit and opposition spread displays are never shown. Only objects that are part of the steering wheel mesh are shown, so for example a gear display that is part of the dash mesh is not. The log lists how many objects of each display a steering wheel mesh has. Other displays (suggested gear, aids, LEDs, opposition spread), mirrors and, unless [ShowLCD](#ShowLCD) is enabled, the LCD are not shown.
 
 GP4's own flat gloves and arms are still drawn on the 3D external steering wheels, in the same place and with the same team arm colours as on the flat steering wheel; only the flat steering wheel and its rev lights are left out.
 
@@ -91,6 +92,10 @@ When `UseCockpitMesh` is enabled, every [CockpitSteeringWheels](#CockpitSteering
 ### CockpitMeshScale
 
 Scale of the 3D external steering wheels, applied to the whole mesh around its rotation point. The cockpit steering wheel mesh is larger than GP4's flat steering wheel, and `0.7` matches it closely. Values of 0 or less are ignored and `0.7` is used instead. Only used when `UseCockpitMesh` is enabled.
+
+### ShowLCD
+
+When enabled, the LCD text is also shown on the 3D external steering wheel of the car being viewed, from any external camera, TV camera or replay. It shows what the car's LCD would show in the cockpit view. Only the viewed car's steering wheel shows it, when its mesh has an `LCD` object or when [AlwaysShow](#AlwaysShow) is enabled. The [CockpitLCD](#CockpitLCD) settings apply: positions, font, colour and scale, per car included. Only used when `UseCockpitMesh` is enabled.
 
 ## CockpitSteeringWheels
 

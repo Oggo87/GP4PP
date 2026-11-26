@@ -69,6 +69,7 @@ namespace SteeringWheels
 	bool useCockpitMesh = false;
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
+	bool externalLcd = false;				// LCD on the viewed car's 3D external wheel
 	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
 	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
@@ -181,6 +182,11 @@ namespace SteeringWheels
 	DWORD bestLapOrder = 0x00675958;			// car ids by best lap, position outside a race
 	DWORD numBestLapOrder = 0x0066d8ec;			// dword
 	DWORD stWheelCarsDrawn = 0x00a4d6a0;		// dword, cars written to the external wheel buffers this frame
+	DWORD lcdPointer = 0x00a53358;				// cgp4Lcd, CGP4LCD*
+	DWORD currentCamera = 0x0066d7a4;			// byte CurrentCamera, CAMERA_COCKPIT in the cockpit
+	DWORD cockpitCarData = 0x00679d2c;			// g_cockpitCar, car physics data the LCD is filled from
+	DWORD vduLiveViewActive = 0x00a53ad0;		// dword, the LCD is filled from g_viewedCar instead
+	DWORD lcdForceRefresh = 0x00893cfa;			// byte, every LCD field is rewritten
 	DWORD tweakerSteerPosTable = 0x4005df64;	// GP4Tweak.dll, x, y, z of the flat external wheel per driver, used by its SteerPos patch instead of the team offsets
 
 	// Function Addresses
@@ -191,6 +197,8 @@ namespace SteeringWheels
 	DWORD CockpitUpdate = 0x00470910;
 	DWORD CockpitDestructor = 0x0046f540;
 	DWORD LcdDraw = 0x0047ac10;
+	DWORD LcdUpdate = 0x0047acb0;			// CGP4LCD::Update, thiscall
+	DWORD UpdateDashData = 0x00514ab5;		// registers in, ESI changed, no stack arguments
 	DWORD StringConstruct = 0x00471ce0;		// std::basic_string(const char*, const allocator&), MSVC6
 	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
 	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
@@ -225,6 +233,7 @@ namespace SteeringWheels
 	typedef void(__thiscall* CockpitUpdateType)(BYTE*, DWORD, int);
 	typedef void(__thiscall* CockpitDestructorType)(BYTE*);
 	typedef void(__thiscall* LcdDrawType)(BYTE*);
+	typedef void(__thiscall* LcdUpdateType)(BYTE*);
 	typedef BYTE*(__thiscall* StringConstructType)(BYTE*, const char*, const BYTE*);
 	typedef void(__thiscall* StringDestructType)(BYTE*);
 	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
@@ -260,6 +269,7 @@ namespace SteeringWheels
 	CockpitUpdateType CockpitUpdateFunc = (CockpitUpdateType)CockpitUpdate;
 	CockpitDestructorType CockpitDestructorFunc = (CockpitDestructorType)CockpitDestructor;
 	LcdDrawType LcdDrawFunc = (LcdDrawType)LcdDraw;
+	LcdUpdateType LcdUpdateFunc = (LcdUpdateType)LcdUpdate;
 	StringConstructType StringConstructFunc = (StringConstructType)StringConstruct;
 	StringDestructType StringDestructFunc = (StringDestructType)StringDestruct;
 	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
@@ -372,6 +382,9 @@ namespace SteeringWheels
 	const DWORD COCKPIT_DASH_MESH = 0xd88;
 	const DWORD COCKPIT_WHEEL_MESH = 0xd8c;
 	const DWORD LCD_MESH = 0x00;				// CGP4LCD mesh_0x0, the "LCD" object of this mesh places the text
+	const BYTE CAMERA_COCKPIT = 0;
+	const DWORD CAR_DATA_RACE_FLAGS = 0x083;	// CarDynamicData flagsRaceFlags_0x083, bit 5 makes UpdateDashData reset the dash
+	const BYTE RACE_FLAG_DASH_RESET = 0x20;
 	const DWORD MESH_FILE_NAME = 0xa0;			// CGP4Mesh fileName_0xa0, char[128]
 	const DWORD LCD_LANGUAGE = 0x08;			// CGP4LCD LanguageData*
 	const DWORD LCD_GROUPS = 0x19c;				// CGP4LCD GP4ScreenObjectManager*[40]
@@ -2016,6 +2029,94 @@ namespace SteeringWheels
 		}
 	}
 
+	// UpdateDashData keeps the car in ESI and runs its writers inside PUSHAD ... POPAD
+	void updateDashData()
+	{
+		__asm pushad
+		__asm call dword ptr[UpdateDashData]
+		__asm popad
+	}
+
+	// GP4 only fills and draws the LCD in the cockpit view: do both for the viewed car's 3D external wheel, as if it were the cockpit car
+	void drawExternalLcd(BYTE* device, BYTE* mesh, const D3DMATRIX& world, int carIndex)
+	{
+		BYTE* lcd = MemUtils::addressToValue<BYTE*>(lcdPointer);
+		BYTE* data = carDynamicData.empty() ? NULL : carDynamicData[carIndex];
+		BYTE* cockpit = MemUtils::addressToValue<BYTE*>(cockpitPointer);
+		BYTE* lcdMesh = lcd != NULL ? field<BYTE*>(lcd, LCD_MESH) : NULL;
+
+		if (data == NULL || lcdMesh == NULL || MemUtils::addressToValue<DWORD>(vduLiveViewActive) != 0)
+		{
+			return;
+		}
+
+		BYTE* textMesh = mesh;
+
+		if (GetObjectIndexByNameFunc(mesh, "LCD") == 0xffffffff)
+		{
+			if (!alwaysShowLcd || lcdMesh == mesh || GetObjectIndexByNameFunc(lcdMesh, "LCD") == 0xffffffff)
+			{
+				return;
+			}
+
+			// Same as AlwaysShow in the cockpit: the default wheel, placed where this car's wheel is, places the text
+			textMesh = lcdMesh;
+
+			MeshSetTransformFunc(textMesh, &world, -1);
+			MeshUpdateTransformsFunc(textMesh, -1, 0);
+		}
+
+		if (!lcdLayoutsLoaded && cockpit != NULL && cockpit == cockpitObject)
+		{
+			loadLcdLayouts(lcd);
+		}
+
+		BYTE* camera = MemUtils::addressToPtr<BYTE>(currentCamera);
+		BYTE** cockpitCar = MemUtils::addressToPtr<BYTE*>(cockpitCarData);
+		BYTE oldCamera = *camera;
+		BYTE* oldCockpitCar = *cockpitCar;
+		BYTE oldRaceFlags = field<BYTE>(data, CAR_DATA_RACE_FLAGS);
+
+		*camera = CAMERA_COCKPIT;
+		*cockpitCar = data;
+		*MemUtils::addressToPtr<BYTE>(lcdForceRefresh) = 1;	// what RenderGameFrame does every cockpit frame
+
+		updateDashData();
+		LcdUpdateFunc(lcd);
+
+		vector<LcdPosition>* layout = NULL;
+
+		if (carIndex < (int)carLcdLayout.size() && carLcdLayout[carIndex] != VANILLA)
+		{
+			layout = &lcdLayoutFiles[carLcdLayout[carIndex]].positions;
+		}
+
+		// The text is placed with the LCD object of the external mesh, which was just placed on the car
+		field<BYTE*>(lcd, LCD_MESH) = textMesh;
+
+		if (layout != NULL)
+		{
+			swapLcdLayout(lcd, *layout);
+		}
+
+		// The original Draw, the colour, scale and font hooks pick this car through viewedCar()
+		LcdDrawFunc(lcd);
+
+		if (layout != NULL)
+		{
+			swapLcdLayout(lcd, *layout);
+		}
+
+		field<BYTE*>(lcd, LCD_MESH) = lcdMesh;
+
+		*camera = oldCamera;
+		*cockpitCar = oldCockpitCar;
+		field<BYTE>(data, CAR_DATA_RACE_FLAGS) = (field<BYTE>(data, CAR_DATA_RACE_FLAGS) & ~RACE_FLAG_DASH_RESET) | (oldRaceFlags & RACE_FLAG_DASH_RESET);
+
+		// The font changes the device state: the next mesh sets its shader again
+		field<BYTE*>(device, DEVICE_CURRENT_SHADER) = NULL;
+	}
+
 	//
 	// 3D external steering wheels
 	//
@@ -2657,6 +2758,12 @@ namespace SteeringWheels
 			MeshDrawType draw = *reinterpret_cast<MeshDrawType*>(field<BYTE*>(mesh, 0) + MESH_DRAW);
 			draw(mesh, -1, NULL, 0);
 
+			// Only the viewed car's wheel, and not in the cockpit, where GP4 draws the LCD itself
+			if (externalLcd && carIndex == viewedCar() && MemUtils::addressToValue<BYTE>(currentCamera) != CAMERA_COCKPIT)
+			{
+				drawExternalLcd(device, mesh, world, carIndex);
+			}
+
 			meshCars[numMeshCars] = car;
 			oldWheelVisible[numMeshCars] = field<BYTE>(car, CAR_WHEEL_VISIBLE);
 			numMeshCars++;
@@ -2829,6 +2936,14 @@ namespace SteeringWheels
 		}
 
 		OutputGP4PPDebugString("CockpitMeshScale " + externalSettings.name + ": " + to_string(cockpitMeshScale));
+
+		try
+		{
+			externalLcd = iniSettings[externalSettings.section]["ShowLCD"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("ShowLCD " + externalSettings.name + ": " + (externalLcd && useCockpitMesh ? "Enabled" : "Disabled"));
 
 		loadAssetSettings(iniSettings, cockpitSettings);
 		loadAssetSettings(iniSettings, dashSettings);
