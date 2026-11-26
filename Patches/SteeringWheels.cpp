@@ -70,6 +70,8 @@ namespace SteeringWheels
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
 	bool externalLcd = false;				// LCD on the viewed car's 3D external wheel
+	bool lcdTextDepthPatched = false;
+	bool externalLcdPass = false;			// CGP4LCD::Draw runs for the 3D external wheel
 	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
 	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
@@ -119,6 +121,7 @@ namespace SteeringWheels
 	DWORD lcdDrawCall = 0x0049cfa6;
 	DWORD lcdColourCall = 0x0047ac52;		// CGP4LCD::Draw: call SetFontColour?(0, 0)
 	DWORD lcdScaleCall = 0x0047ac3a;		// CGP4LCD::Draw: call SetFontScale?(0, 4.8f, 0)
+	DWORD lcdTextDrawCalls[] = { 0x0047dfbb, 0x0047dff2, 0x0047e048, 0x0047e080 };	// GP4ScreenTextObject::Draw: call DrawTextW?(x, y, 0.01, ...)
 
 	// Original bytes of the call instructions above, checked before patching
 	BYTE initCarSteeringWheelsBytes[] = { 0xe8, 0x9d, 0xda, 0xff, 0xff };
@@ -199,6 +202,7 @@ namespace SteeringWheels
 	DWORD LcdDraw = 0x0047ac10;
 	DWORD LcdUpdate = 0x0047acb0;			// CGP4LCD::Update, thiscall
 	DWORD UpdateDashData = 0x00514ab5;		// registers in, ESI changed, no stack arguments
+	DWORD LanguageDrawTextW = 0x004778f0;	// LanguageData::DrawTextW?(x, y, z, font, text, unused, linearFilter), RET 0x1c
 	DWORD StringConstruct = 0x00471ce0;		// std::basic_string(const char*, const allocator&), MSVC6
 	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
 	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
@@ -234,6 +238,7 @@ namespace SteeringWheels
 	typedef void(__thiscall* CockpitDestructorType)(BYTE*);
 	typedef void(__thiscall* LcdDrawType)(BYTE*);
 	typedef void(__thiscall* LcdUpdateType)(BYTE*);
+	typedef void(__thiscall* DrawTextWType)(BYTE*, float, float, float, int, WORD*, int, char);
 	typedef BYTE*(__thiscall* StringConstructType)(BYTE*, const char*, const BYTE*);
 	typedef void(__thiscall* StringDestructType)(BYTE*);
 	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
@@ -270,6 +275,7 @@ namespace SteeringWheels
 	CockpitDestructorType CockpitDestructorFunc = (CockpitDestructorType)CockpitDestructor;
 	LcdDrawType LcdDrawFunc = (LcdDrawType)LcdDraw;
 	LcdUpdateType LcdUpdateFunc = (LcdUpdateType)LcdUpdate;
+	DrawTextWType DrawTextWFunc = (DrawTextWType)LanguageDrawTextW;
 	StringConstructType StringConstructFunc = (StringConstructType)StringConstruct;
 	StringDestructType StringDestructFunc = (StringDestructType)StringDestruct;
 	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
@@ -2037,6 +2043,14 @@ namespace SteeringWheels
 		__asm popad
 	}
 
+	// Replaces GP4ScreenTextObject::Draw's DrawTextW?(x, y, 0.01, ...) calls: thiscall with 7 stack arguments, matched by __fastcall.
+	// GP4 draws the labels at depth 0.01 and the values at 0, on the screen. The depth test is off for the text, so from any point
+	// other than the cockpit eye the labels drift over the screen as the 3D external wheel turns: there they are drawn at 0 too
+	void __fastcall lcdTextDrawFunc(BYTE* language, void* /*edx*/, float x, float y, float z, int font, WORD* text, int unused, char linearFilter)
+	{
+		DrawTextWFunc(language, x, y, externalLcdPass ? 0.0f : z, font, text, unused, linearFilter);
+	}
+
 	// GP4 only fills and draws the LCD in the cockpit view: do both for the viewed car's 3D external wheel, as if it were the cockpit car
 	void drawExternalLcd(BYTE* device, BYTE* mesh, const D3DMATRIX& world, int carIndex)
 	{
@@ -2100,7 +2114,9 @@ namespace SteeringWheels
 		}
 
 		// The original Draw, the colour, scale and font hooks pick this car through viewedCar()
+		externalLcdPass = true;
 		LcdDrawFunc(lcd);
+		externalLcdPass = false;
 
 		if (layout != NULL)
 		{
@@ -3159,6 +3175,29 @@ namespace SteeringWheels
 
 				externalPatched = true;
 			}
+		}
+
+		// LCD on the 3D external wheel: its labels are drawn on the screen during our pass only
+		if (externalLcd && useCockpitMesh)
+		{
+			bool textCalls = true;
+
+			for (DWORD call : lcdTextDrawCalls)
+			{
+				textCalls = checkCallTarget(call, LanguageDrawTextW, "GP4ScreenTextObject::Draw DrawTextW") && textCalls;
+			}
+
+			for (DWORD call : lcdTextDrawCalls)
+			{
+				if (textCalls)
+				{
+					MemUtils::injectFunctionCall(call, PtrToUlong(lcdTextDrawFunc), VAR_NAME(lcdTextDrawFunc));
+				}
+			}
+
+			lcdTextDepthPatched = textCalls;
+
+			OutputGP4PPDebugString("Steering Wheels: external LCD labels on the screen : " + string(lcdTextDepthPatched ? "Applied" : "Not applied"));
 		}
 
 		// Cockpit steering wheel and dash: mesh loading, per-frame selection and clean-up calls
