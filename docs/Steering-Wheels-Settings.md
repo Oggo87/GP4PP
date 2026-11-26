@@ -91,11 +91,13 @@ When `UseCockpitMesh` is enabled, every [CockpitSteeringWheels](#CockpitSteering
 
 ### CockpitMeshScale
 
-Scale of the 3D external steering wheels, applied to the whole mesh around its rotation point. The cockpit steering wheel mesh is larger than GP4's flat steering wheel, and `0.7` matches it closely. Values of 0 or less are ignored and `0.7` is used instead. Only used when `UseCockpitMesh` is enabled.
+Scale of the 3D external steering wheels, applied to the whole mesh around its rotation point. The cockpit steering wheel mesh is larger than GP4's flat steering wheel, and `0.7` matches it closely. Values of 0 or less are ignored and `0.7` is used instead. Used when `UseCockpitMesh` is enabled, and for the LCD text on the flat external steering wheels when [ShowLCD](#ShowLCD) is enabled.
 
 ### ShowLCD
 
-When enabled, the LCD text is also shown on the 3D external steering wheel of the car being viewed, from any external camera, TV camera or replay. It shows what the car's LCD would show in the cockpit view. Only the viewed car's steering wheel shows it, when its mesh has an `LCD` object or when [AlwaysShow](#AlwaysShow) is enabled. The [CockpitLCD](#CockpitLCD) settings apply: positions, font, colour and scale, per car included. While the player's car is in the pits and its LCD is shown this way, the pit menu can be navigated from that camera with the same controls as in the cockpit view. Only used when `UseCockpitMesh` is enabled.
+When enabled, the LCD text is also shown on the external steering wheel of the car being viewed, from any external camera, TV camera or replay. It shows what the car's LCD would show in the cockpit view. Only the viewed car's steering wheel shows it. The [CockpitLCD](#CockpitLCD) settings apply: positions, font, colour and scale, per car included. While the player's car is in the pits and its LCD is shown this way, the pit menu can be navigated from that camera with the same controls as in the cockpit view.
+
+With `UseCockpitMesh` enabled, the text is shown on the 3D steering wheel when its mesh has an `LCD` object or when [AlwaysShow](#AlwaysShow) is enabled. On the flat steering wheels, the text is placed with the `LCD` object of the default `cockpit_wheel.gp4`, scaled by [CockpitMeshScale](#CockpitMeshScale); per-team or per-car `.pos` files can line it up with the screen on custom steering wheel textures.
 
 ## CockpitSteeringWheels
 

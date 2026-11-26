@@ -69,10 +69,10 @@ namespace SteeringWheels
 	bool useCockpitMesh = false;
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
-	bool externalLcd = false;				// LCD on the viewed car's 3D external wheel
+	bool externalLcd = false;				// LCD on the viewed car's external wheel, flat or 3D
 	bool lcdTextDepthPatched = false;
-	bool externalLcdPass = false;			// CGP4LCD::Draw runs for the 3D external wheel
-	BYTE* externalLcdCar = NULL;			// car data the 3D external wheel's LCD was last drawn for
+	bool externalLcdPass = false;			// CGP4LCD::Draw runs for the external wheel
+	BYTE* externalLcdCar = NULL;			// car data the external wheel's LCD was last drawn for
 	bool pitMenuKeepInputs = false;
 	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
 	bool lcdPerWheel = false;
@@ -925,6 +925,8 @@ namespace SteeringWheels
 	}
 
 	int drawCockpitMeshWheels(BYTE* device, int skipCar);
+	void drawFlatWheelLcd(BYTE* device, int skipCar);
+	void updateCarDynamicData();
 
 	bool isFrameMeshCar(BYTE* car)
 	{
@@ -1106,6 +1108,12 @@ namespace SteeringWheels
 		for (int i = 0; i < numMeshCars; i++)
 		{
 			field<BYTE>(meshCars[i], CAR_WHEEL_VISIBLE) = oldWheelVisible[i];
+		}
+
+		// After the flat pass, so the text is drawn over the viewed car's flat wheel
+		if (externalLcd && !useCockpitMesh)
+		{
+			drawFlatWheelLcd(device, (int)param);
 		}
 	}
 
@@ -2096,9 +2104,10 @@ namespace SteeringWheels
 
 		BYTE* textMesh = mesh;
 
-		if (GetObjectIndexByNameFunc(mesh, "LCD") == 0xffffffff)
+		if (mesh == NULL || GetObjectIndexByNameFunc(mesh, "LCD") == 0xffffffff)
 		{
-			if (!alwaysShowLcd || lcdMesh == mesh || GetObjectIndexByNameFunc(lcdMesh, "LCD") == 0xffffffff)
+			// Flat wheels have no LCD object: always the default wheel's. 3D wheels without one only with AlwaysShow
+			if ((mesh != NULL && !alwaysShowLcd) || lcdMesh == mesh || GetObjectIndexByNameFunc(lcdMesh, "LCD") == 0xffffffff)
 			{
 				return;
 			}
@@ -2218,7 +2227,7 @@ namespace SteeringWheels
 		return true;
 	}
 
-	D3DMATRIX externalWheelMatrix(BYTE* car, int team)
+	D3DMATRIX externalWheelMatrix(BYTE* car, int team, bool flat = false)
 	{
 		// The mesh origin is the rotation point: placed at the centre of the flat wheel, turned and tilted like in the cockpit
 		float offsetX = 0.0f;
@@ -2235,11 +2244,67 @@ namespace SteeringWheels
 		float wheelZ = MemUtils::addressToValue<float>(stWheelZ);
 		float tilt = MemUtils::addressToValue<float>(cockpitWheelTilt);
 
+		if (flat)
+		{
+			// As the flat wheel: turned around its own origin, g_stWheelY below the centre of its front quad, and not tilted
+			D3DMATRIX world = matrixMultiply(matrixScaling(cockpitMeshScale), matrixTranslation(0.0f, wheelY, wheelZ));
+			world = matrixMultiply(world, matrixRotationZ(externalWheelAngle(car)));
+			world = matrixMultiply(world, matrixTranslation(offsetX, offsetY, offsetZ));
+
+			return matrixMultiply(world, field<D3DMATRIX>(car, CAR_MATRIX));
+		}
+
 		D3DMATRIX world = matrixMultiply(matrixScaling(cockpitMeshScale), matrixRotationZ(externalWheelAngle(car)));
 		world = matrixMultiply(world, matrixRotationX(tilt));
 		world = matrixMultiply(world, matrixTranslation(offsetX, offsetY + wheelY, offsetZ + wheelZ));
 
 		return matrixMultiply(world, field<D3DMATRIX>(car, CAR_MATRIX));
+	}
+
+	// LCD on the viewed car's flat external wheel: the default cockpit wheel, placed where the flat wheel is, places the text
+	void drawFlatWheelLcd(BYTE* device, int skipCar)
+	{
+		BYTE* lodManager = MemUtils::addressToValue<BYTE*>(lodManagerPointer);
+		int carIndex = viewedCar();
+
+		if (device == NULL || lodManager == NULL || carIndex < 0 || carIndex >= numCars || carIndex == skipCar
+			|| MemUtils::addressToValue<BYTE>(currentCamera) == CAMERA_COCKPIT)
+		{
+			return;
+		}
+
+		BYTE* car = carAt(carIndex);
+		int team = car != NULL ? field<int>(car, CAR_TEAM_INDEX) : -1;
+
+		if (car == NULL || team < 0 || team >= numTeams || field<BYTE>(car, CAR_WHEEL_VISIBLE) == 0)
+		{
+			return;
+		}
+
+		float maxDistance = MemUtils::addressToValue<float>(stWheelMaxDistance);
+		DWORD numEntries = field<DWORD>(lodManager, LOD_NUM_ENTRIES);
+		BYTE* entry = lodManager + LOD_ENTRIES;
+
+		// Same checks GP4 makes before drawing the car's flat wheel
+		for (DWORD entryIndex = 0; entryIndex < numEntries; entryIndex++, entry += LOD_ENTRY_SIZE)
+		{
+			if (field<int>(entry, LOD_ENTRY_CAR) != carIndex)
+			{
+				continue;
+			}
+
+			if (field<BYTE>(entry, LOD_ENTRY_VISIBLE) != 0 && field<float>(entry, LOD_ENTRY_DISTANCE) < maxDistance)
+			{
+				if (numDynamicData > 0)
+				{
+					updateCarDynamicData();
+				}
+
+				drawExternalLcd(device, NULL, externalWheelMatrix(car, team, true), carIndex);
+			}
+
+			return;
+		}
 	}
 
 	BYTE* externalWheelMesh(BYTE* cockpit, int carIndex)
@@ -2990,7 +3055,7 @@ namespace SteeringWheels
 		}
 		catch (exception ex) {}
 
-		OutputGP4PPDebugString("ShowLCD " + externalSettings.name + ": " + (externalLcd && useCockpitMesh ? "Enabled" : "Disabled"));
+		OutputGP4PPDebugString("ShowLCD " + externalSettings.name + ": " + (externalLcd ? "Enabled" : "Disabled"));
 
 		loadAssetSettings(iniSettings, cockpitSettings);
 		loadAssetSettings(iniSettings, dashSettings);
@@ -3120,7 +3185,7 @@ namespace SteeringWheels
 		bool lcdColourEnabled = lcdIndividual || lcdColour.getColour() != 0;
 		bool lcdScaleEnabled = lcdIndividual || lcdScale != 1.0f;
 		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled || lcdScaleEnabled;
-		bool externalEnabled = externalSettings.enabled || useCockpitMesh;
+		bool externalEnabled = externalSettings.enabled || useCockpitMesh || externalLcd;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
 
 		// LCD font: GP4 creates it after this, in D3D_Init and on every language change
@@ -3179,11 +3244,14 @@ namespace SteeringWheels
 
 				MemUtils::injectFunctionCall(renderCarSteeringWheelsCall, PtrToUlong(renderCarSteeringWheelsFunc), VAR_NAME(renderCarSteeringWheelsFunc));
 
-				// Gears and flags of the 3D wheels only, the rest of the patch does not need the car physics data
-				if (useCockpitMesh)
+				// Gears and flags of the 3D wheels and the external LCD only, the rest of the patch does not need the car physics data
+				if (useCockpitMesh || externalLcd)
 				{
 					readDynamicDataCount();
+				}
 
+				if (useCockpitMesh)
+				{
 					// GP4's gloves and arms on the 3D wheels, without it those cars skip the flat renderer
 					if (readWheelBlockCount())
 					{
@@ -3208,8 +3276,8 @@ namespace SteeringWheels
 			}
 		}
 
-		// LCD on the 3D external wheel: its labels are drawn on the screen during our pass only
-		if (externalLcd && useCockpitMesh)
+		// LCD on the external wheel: its labels are drawn on the screen during our pass only
+		if (externalLcd && externalPatched)
 		{
 			bool textCalls = true;
 
