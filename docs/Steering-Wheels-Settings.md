@@ -95,7 +95,7 @@ Scale of the 3D external steering wheels, applied to the whole mesh around its r
 
 ### ShowLCD
 
-When enabled, the LCD text is also shown on the 3D external steering wheel of the car being viewed, from any external camera, TV camera or replay. It shows what the car's LCD would show in the cockpit view. Only the viewed car's steering wheel shows it, when its mesh has an `LCD` object or when [AlwaysShow](#AlwaysShow) is enabled. The [CockpitLCD](#CockpitLCD) settings apply: positions, font, colour and scale, per car included. Only used when `UseCockpitMesh` is enabled.
+When enabled, the LCD text is also shown on the 3D external steering wheel of the car being viewed, from any external camera, TV camera or replay. It shows what the car's LCD would show in the cockpit view. Only the viewed car's steering wheel shows it, when its mesh has an `LCD` object or when [AlwaysShow](#AlwaysShow) is enabled. The [CockpitLCD](#CockpitLCD) settings apply: positions, font, colour and scale, per car included. While the player's car is in the pits and its LCD is shown this way, the pit menu can be navigated from that camera with the same controls as in the cockpit view. Only used when `UseCockpitMesh` is enabled.
 
 ## CockpitSteeringWheels
 

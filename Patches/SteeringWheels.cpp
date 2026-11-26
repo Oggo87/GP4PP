@@ -72,6 +72,8 @@ namespace SteeringWheels
 	bool externalLcd = false;				// LCD on the viewed car's 3D external wheel
 	bool lcdTextDepthPatched = false;
 	bool externalLcdPass = false;			// CGP4LCD::Draw runs for the 3D external wheel
+	BYTE* externalLcdCar = NULL;			// car data the 3D external wheel's LCD was last drawn for
+	bool pitMenuKeepInputs = false;
 	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
 	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
@@ -188,6 +190,8 @@ namespace SteeringWheels
 	DWORD lcdPointer = 0x00a53358;				// cgp4Lcd, CGP4LCD*
 	DWORD currentCamera = 0x0066d7a4;			// byte CurrentCamera, CAMERA_COCKPIT in the cockpit
 	DWORD cockpitCarData = 0x00679d2c;			// g_cockpitCar, car physics data the LCD is filled from
+	DWORD viewedCarData = 0x00679d30;			// g_viewedCar, car physics data of the viewed car
+	DWORD pitMenuInputsCall = 0x0051d8de;		// ReadPlayerDrivingControls: call ClearInputsInPitMenu?, last of the player's control readers
 	DWORD vduLiveViewActive = 0x00a53ad0;		// dword, the LCD is filled from g_viewedCar instead
 	DWORD lcdForceRefresh = 0x00893cfa;			// byte, every LCD field is rewritten
 	DWORD tweakerSteerPosTable = 0x4005df64;	// GP4Tweak.dll, x, y, z of the flat external wheel per driver, used by its SteerPos patch instead of the team offsets
@@ -202,6 +206,7 @@ namespace SteeringWheels
 	DWORD LcdDraw = 0x0047ac10;
 	DWORD LcdUpdate = 0x0047acb0;			// CGP4LCD::Update, thiscall
 	DWORD UpdateDashData = 0x00514ab5;		// registers in, ESI changed, no stack arguments
+	DWORD ClearInputsInPitMenu = 0x0051d809;	// ClearInputsInPitMenu?, In: ESI = car. In the pit menu, clears its inputs unless it is g_cockpitCar
 	DWORD LanguageDrawTextW = 0x004778f0;	// LanguageData::DrawTextW?(x, y, z, font, text, unused, linearFilter), RET 0x1c
 	DWORD StringConstruct = 0x00471ce0;		// std::basic_string(const char*, const allocator&), MSVC6
 	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
@@ -2051,6 +2056,31 @@ namespace SteeringWheels
 		DrawTextWFunc(language, x, y, externalLcdPass ? 0.0f : z, font, text, unused, linearFilter);
 	}
 
+	// GP4 keeps the pit menu inputs only for the cockpit car: also for the viewed car whose LCD is on its 3D external wheel
+	bool pitMenuInputsOnExternalLcd(BYTE* car)
+	{
+		return car != NULL && car == externalLcdCar && car == MemUtils::addressToValue<BYTE*>(viewedCarData)
+			&& MemUtils::addressToValue<DWORD>(vduLiveViewActive) == 0;
+	}
+
+	__declspec(naked) void pitMenuInputsFunc()
+	{
+		//ESI - car
+		__asm pushad
+		__asm push ESI
+		__asm call pitMenuInputsOnExternalLcd
+		__asm add ESP, 4
+		__asm mov pitMenuKeepInputs, AL
+		__asm popad
+
+		__asm cmp pitMenuKeepInputs, 0
+		__asm jne keepInputs
+		__asm jmp ClearInputsInPitMenu //original function, returns to GP4
+
+	keepInputs:
+		__asm ret
+	}
+
 	// GP4 only fills and draws the LCD in the cockpit view: do both for the viewed car's 3D external wheel, as if it were the cockpit car
 	void drawExternalLcd(BYTE* device, BYTE* mesh, const D3DMATRIX& world, int carIndex)
 	{
@@ -2117,6 +2147,7 @@ namespace SteeringWheels
 		externalLcdPass = true;
 		LcdDrawFunc(lcd);
 		externalLcdPass = false;
+		externalLcdCar = data;
 
 		if (layout != NULL)
 		{
@@ -3198,6 +3229,15 @@ namespace SteeringWheels
 			lcdTextDepthPatched = textCalls;
 
 			OutputGP4PPDebugString("Steering Wheels: external LCD labels on the screen : " + string(lcdTextDepthPatched ? "Applied" : "Not applied"));
+
+			bool inputsCall = checkCallTarget(pitMenuInputsCall, ClearInputsInPitMenu, "ClearInputsInPitMenu call");
+
+			if (inputsCall)
+			{
+				MemUtils::injectFunctionCall(pitMenuInputsCall, PtrToUlong(pitMenuInputsFunc), VAR_NAME(pitMenuInputsFunc));
+			}
+
+			OutputGP4PPDebugString("Steering Wheels: external LCD pit menu inputs : " + string(inputsCall ? "Applied" : "Not applied"));
 		}
 
 		// Cockpit steering wheel and dash: mesh loading, per-frame selection and clean-up calls
