@@ -74,6 +74,13 @@ namespace SteeringWheels
 	bool externalLcdPass = false;			// CGP4LCD::Draw runs for the external wheel
 	BYTE* externalLcdCar = NULL;			// car data the external wheel's LCD was last drawn for
 	bool pitMenuKeepInputs = false;
+	bool lcdTextZEnablePatched = false;
+	bool lcdTextFlushPatched = false;
+	bool lcdTextSurfaceSet = false;			// lcdTextSurface is where the text goes during our pass
+	bool lcdTextDepthTest = false;			// the text of this pass is moved onto the surface and depth-tested
+	float lcdTextSurface[3] = {};			// world point on the LCD surface, slightly towards the driver
+	BYTE* lcdTextSurfaceMesh = NULL;		// mesh it was taken from, NULL for a flat wheel
+	vector<BYTE*> lcdTextDepthLogged;
 	AssetSettings lcdSettings = { "CockpitLCD", "Cockpit LCD", "{teamname}\\{language}.pos", "{teamname}_car{car}\\{language}.pos", false, false, true, "", false };
 	bool lcdPerWheel = false;
 	bool alwaysShowLcd = false;
@@ -123,7 +130,7 @@ namespace SteeringWheels
 	DWORD lcdDrawCall = 0x0049cfa6;
 	DWORD lcdColourCall = 0x0047ac52;		// CGP4LCD::Draw: call SetFontColour?(0, 0)
 	DWORD lcdScaleCall = 0x0047ac3a;		// CGP4LCD::Draw: call SetFontScale?(0, 4.8f, 0)
-	DWORD lcdTextDrawCalls[] = { 0x0047dfbb, 0x0047dff2, 0x0047e048, 0x0047e080 };	// GP4ScreenTextObject::Draw: call DrawTextW?(x, y, 0.01, ...)
+	DWORD lcdTextDrawCalls[] = { 0x0047dfbb, 0x0047dff2, 0x0047e048, 0x0047e080, 0x0047e0de, 0x0047e114 };	// GP4ScreenTextObject::Draw and DrawWithKey: call DrawTextW?(x, y, 0.01, ...)
 
 	// Original bytes of the call instructions above, checked before patching
 	BYTE initCarSteeringWheelsBytes[] = { 0xe8, 0x9d, 0xda, 0xff, 0xff };
@@ -192,6 +199,9 @@ namespace SteeringWheels
 	DWORD cockpitCarData = 0x00679d2c;			// g_cockpitCar, car physics data the LCD is filled from
 	DWORD viewedCarData = 0x00679d30;			// g_viewedCar, car physics data of the viewed car
 	DWORD pitMenuInputsCall = 0x0051d8de;		// ReadPlayerDrivingControls: call ClearInputsInPitMenu?, last of the player's control readers
+	DWORD lcdTextZEnableCall = 0x00474ef9;		// CGP4Font::EndScene: push 0 (EBX); push D3DRS_ZENABLE; call QueueRenderState, never restored
+	BYTE lcdTextZEnableArgs[] = { 0x53, 0x6a, 0x07 };	// at 0x00474ef6, so only that call is replaced
+	DWORD lcdTextFlushCall = 0x0047ac9c;			// CGP4LCD::Draw: call FlushAllTextBatches?(GetObjectWorldMatrix?(mesh, LCD)), the parent's matrix with useParentMatrix
 	DWORD vduLiveViewActive = 0x00a53ad0;		// dword, the LCD is filled from g_viewedCar instead
 	DWORD lcdForceRefresh = 0x00893cfa;			// byte, every LCD field is rewritten
 	DWORD tweakerSteerPosTable = 0x4005df64;	// GP4Tweak.dll, x, y, z of the flat external wheel per driver, used by its SteerPos patch instead of the team offsets
@@ -208,6 +218,7 @@ namespace SteeringWheels
 	DWORD UpdateDashData = 0x00514ab5;		// registers in, ESI changed, no stack arguments
 	DWORD ClearInputsInPitMenu = 0x0051d809;	// ClearInputsInPitMenu?, In: ESI = car. In the pit menu, clears its inputs unless it is g_cockpitCar
 	DWORD LanguageDrawTextW = 0x004778f0;	// LanguageData::DrawTextW?(x, y, z, font, text, unused, linearFilter), RET 0x1c
+	DWORD LanguageFlushAllTextBatches = 0x00477b80;	// LanguageData::FlushAllTextBatches?(D3DMATRIX* world), thiscall, RET 4
 	DWORD StringConstruct = 0x00471ce0;		// std::basic_string(const char*, const allocator&), MSVC6
 	DWORD StringDestruct = 0x00471da0;		// std::~basic_string
 	DWORD PosObjectLoad = 0x0047e740;		// GP4ScreenPosObject::Load(basic_string* posPath), base fields only
@@ -244,6 +255,7 @@ namespace SteeringWheels
 	typedef void(__thiscall* LcdDrawType)(BYTE*);
 	typedef void(__thiscall* LcdUpdateType)(BYTE*);
 	typedef void(__thiscall* DrawTextWType)(BYTE*, float, float, float, int, WORD*, int, char);
+	typedef void(__thiscall* FlushAllTextBatchesType)(BYTE*, const D3DMATRIX*);
 	typedef BYTE*(__thiscall* StringConstructType)(BYTE*, const char*, const BYTE*);
 	typedef void(__thiscall* StringDestructType)(BYTE*);
 	typedef bool(__thiscall* PosObjectLoadType)(BYTE*, BYTE*);
@@ -281,6 +293,7 @@ namespace SteeringWheels
 	LcdDrawType LcdDrawFunc = (LcdDrawType)LcdDraw;
 	LcdUpdateType LcdUpdateFunc = (LcdUpdateType)LcdUpdate;
 	DrawTextWType DrawTextWFunc = (DrawTextWType)LanguageDrawTextW;
+	FlushAllTextBatchesType FlushAllTextBatchesFunc = (FlushAllTextBatchesType)LanguageFlushAllTextBatches;
 	StringConstructType StringConstructFunc = (StringConstructType)StringConstruct;
 	StringDestructType StringDestructFunc = (StringDestructType)StringDestruct;
 	PosObjectLoadType PosObjectLoadFunc = (PosObjectLoadType)PosObjectLoad;
@@ -396,6 +409,9 @@ namespace SteeringWheels
 	const BYTE CAMERA_COCKPIT = 0;
 	const DWORD CAR_DATA_RACE_FLAGS = 0x083;	// CarDynamicData flagsRaceFlags_0x083, bit 5 makes UpdateDashData reset the dash
 	const BYTE RACE_FLAG_DASH_RESET = 0x20;
+	const DWORD LCD_TEXT_ZBIAS = 2;				// 0..16, the depth-tested text stays in front of the LCD object it lies on
+	const float LCD_TEXT_SURFACE_OFFSET = 0.001f;	// world units towards the driver, against flickering on the surface
+	const float LCD_TEXT_MAX_DEPTH = 0.1f;			// world units: a surface further from the origin plane of the mesh is a wrong reading, not used
 	const DWORD MESH_FILE_NAME = 0xa0;			// CGP4Mesh fileName_0xa0, char[128]
 	const DWORD LCD_LANGUAGE = 0x08;			// CGP4LCD LanguageData*
 	const DWORD LCD_GROUPS = 0x19c;				// CGP4LCD GP4ScreenObjectManager*[40]
@@ -500,7 +516,15 @@ namespace SteeringWheels
 	const DWORD MESH_OBJECT_DATA = 0x08;
 	const DWORD MESH_OBJECT_INDEX = 0x0c;
 	const DWORD OBJECT_DATA_FLAGS = 0x00;
+	const DWORD OBJECT_DATA_BOUNDS = 0x04;		// CGP4MeshObjectData arrBounds_0x4, OBJECT_BOUNDS_SIZE per object
 	const DWORD OBJECT_DATA_TRANSFORMS = 0x08;
+	const DWORD OBJECT_DATA_INFO = 0x18;		// CGP4MeshObjectData arrObjectInfo_0x18, OBJECT_INFO_SIZE per object
+	const DWORD OBJECT_BOUNDS_SIZE = 0x3c;
+	const DWORD OBJECT_BOUNDS_RADIUS = 0x04;	// bounding sphere radius, object space
+	const DWORD OBJECT_BOUNDS_MIN = 0x14;		// bounding box, object space
+	const DWORD OBJECT_BOUNDS_MAX = 0x20;
+	const DWORD OBJECT_INFO_SIZE = 0x88;
+	const DWORD OBJECT_INFO_MATRIX = 0x40;		// tMatrix_0x40, the object's transform from the mesh file, object to mesh space
 	const DWORD OBJECT_FLAGS_SIZE = 0x14;
 	const DWORD OBJECT_TRANSFORM_SIZE = 0x94;
 	const DWORD OBJECT_TRANSFORM_MATRIX = 0x4c;
@@ -2064,6 +2088,14 @@ namespace SteeringWheels
 		DrawTextWFunc(language, x, y, externalLcdPass ? 0.0f : z, font, text, unused, linearFilter);
 	}
 
+	// Replaces CGP4Font::EndScene's QueueRenderState(D3DRS_ZENABLE, 0): GP4 draws the LCD text without the depth test, fine in the cockpit,
+	// but the car and driver in front of the external wheel must hide it. The text still does not write depth
+	int __fastcall lcdTextZEnableFunc(BYTE* device, void* /*edx*/, DWORD state, DWORD value)
+	{
+		// Only when the text is moved onto the surface: on the origin plane of the mesh, the mesh itself could hide all of it
+		return DeviceQueueRenderStateFunc(device, state, externalLcdPass && lcdTextDepthTest ? D3DZB_TRUE : value);
+	}
+
 	// GP4 keeps the pit menu inputs only for the cockpit car: also for the viewed car whose LCD is on its 3D external wheel
 	bool pitMenuInputsOnExternalLcd(BYTE* car)
 	{
@@ -2087,6 +2119,201 @@ namespace SteeringWheels
 
 	keepInputs:
 		__asm ret
+	}
+
+	const ExternalWheelObjects& findExternalWheelObjects(BYTE* mesh);
+
+	// Object-to-world matrix, object-space bounding box and radius of a mesh object, as CGP4MeshObject::ExtendBounds? reaches them
+	bool objectBounds(BYTE* mesh, int objectIndex, D3DMATRIX& world, const float*& minCorner, const float*& maxCorner, float& radius)
+	{
+		BYTE* objects = field<BYTE*>(mesh, MESH_OBJECTS);
+
+		if (objects == NULL || objectIndex < 0 || (DWORD)objectIndex >= field<DWORD>(mesh, MESH_NUM_OBJECTS))
+		{
+			return false;
+		}
+
+		// With useParentMatrix every object is drawn with the parent's matrix, the only one UpdateMatrices? keeps up to date,
+		// after its own transform from the mesh file. Otherwise with its own world matrix
+		bool parentMatrix = field<BYTE>(mesh, MESH_PREPARED) != 0;
+		int matrixObject = parentMatrix ? field<int>(mesh, MESH_PARENT_OBJECT) : objectIndex;
+
+		if (matrixObject < 0 || (DWORD)matrixObject >= field<DWORD>(mesh, MESH_NUM_OBJECTS))
+		{
+			return false;
+		}
+
+		BYTE* record = objects + objectIndex * MESH_OBJECT_SIZE;
+		BYTE* matrixRecord = objects + matrixObject * MESH_OBJECT_SIZE;
+		BYTE* data = field<BYTE*>(record, MESH_OBJECT_DATA);
+		BYTE* matrixData = field<BYTE*>(matrixRecord, MESH_OBJECT_DATA);
+		int index = field<int>(record, MESH_OBJECT_INDEX);
+		int matrixIndex = field<int>(matrixRecord, MESH_OBJECT_INDEX);
+
+		if (data == NULL || matrixData == NULL || field<BYTE*>(data, OBJECT_DATA_BOUNDS) == NULL || field<BYTE*>(data, OBJECT_DATA_INFO) == NULL
+			|| field<BYTE*>(matrixData, OBJECT_DATA_TRANSFORMS) == NULL)
+		{
+			return false;
+		}
+
+		BYTE* bounds = field<BYTE*>(data, OBJECT_DATA_BOUNDS) + index * OBJECT_BOUNDS_SIZE;
+		const D3DMATRIX& drawMatrix = field<D3DMATRIX>(field<BYTE*>(matrixData, OBJECT_DATA_TRANSFORMS), matrixIndex * OBJECT_TRANSFORM_SIZE + OBJECT_TRANSFORM_MATRIX);
+		const D3DMATRIX& fileMatrix = field<D3DMATRIX>(field<BYTE*>(data, OBJECT_DATA_INFO), index * OBJECT_INFO_SIZE + OBJECT_INFO_MATRIX);
+
+		world = parentMatrix ? matrixMultiply(fileMatrix, drawMatrix) : drawMatrix;
+		minCorner = reinterpret_cast<const float*>(bounds + OBJECT_BOUNDS_MIN);
+		maxCorner = reinterpret_cast<const float*>(bounds + OBJECT_BOUNDS_MAX);
+		radius = field<float>(bounds, OBJECT_BOUNDS_RADIUS);
+
+		// An object without faces keeps its initial, inverted box
+		return minCorner[0] <= maxCorner[0] && minCorner[1] <= maxCorner[1] && minCorner[2] <= maxCorner[2];
+	}
+
+	// World point at the centre of the object's bounding box face towards the driver (back, in world space)
+	bool objectFacePoint(BYTE* mesh, int objectIndex, const float back[3], float point[3])
+	{
+		D3DMATRIX world;
+		const float* minCorner;
+		const float* maxCorner;
+		float radius;
+
+		if (!objectBounds(mesh, objectIndex, world, minCorner, maxCorner, radius))
+		{
+			return false;
+		}
+
+		float x = (minCorner[0] + maxCorner[0]) * 0.5f;
+		float y = (minCorner[1] + maxCorner[1]) * 0.5f;
+		float z = world._31 * back[0] + world._32 * back[1] + world._33 * back[2] > 0.0f ? maxCorner[2] : minCorner[2];
+
+		matrixTransformPoint(world, x, y, z, point);
+
+		return true;
+	}
+
+	// The face towards the driver of the LCD object, or of the part of it closest to the driver when the mesh splits it
+	// into LCD, LCD[0], LCD[1]...: object names compare without case, as GetObjectIndexByName does
+	bool lcdFacePoint(BYTE* mesh, const float back[3], float point[3])
+	{
+		BYTE* objects = field<BYTE*>(mesh, MESH_OBJECTS);
+		DWORD numObjects = field<DWORD>(mesh, MESH_NUM_OBJECTS);
+		bool found = false;
+		float closest = 0.0f;
+
+		for (DWORD objectIndex = 0; objects != NULL && numObjects <= MAX_MESH_OBJECTS && objectIndex < numObjects; objectIndex++)
+		{
+			BYTE* record = objects + objectIndex * MESH_OBJECT_SIZE;
+			BYTE* data = field<BYTE*>(record, MESH_OBJECT_DATA);
+
+			if (data == NULL || field<BYTE*>(data, OBJECT_DATA_INFO) == NULL)
+			{
+				continue;
+			}
+
+			const char* name = reinterpret_cast<const char*>(field<BYTE*>(data, OBJECT_DATA_INFO) + field<int>(record, MESH_OBJECT_INDEX) * OBJECT_INFO_SIZE);
+
+			if (_strnicmp(name, "LCD", 3) != 0 || (name[3] != '\0' && name[3] != '['))
+			{
+				continue;
+			}
+
+			float face[3];
+
+			if (objectFacePoint(mesh, (int)objectIndex, back, face))
+			{
+				float towardsDriver = face[0] * back[0] + face[1] * back[1] + face[2] * back[2];
+
+				if (!found || towardsDriver > closest)
+				{
+					memcpy(point, face, sizeof(face));
+					closest = towardsDriver;
+					found = true;
+				}
+			}
+		}
+
+		return found;
+	}
+
+	int largestObject(BYTE* mesh, const vector<int>& objectIndices)
+	{
+		int largest = -1;
+		float largestRadius = 0.0f;
+
+		for (int objectIndex : objectIndices)
+		{
+			D3DMATRIX world;
+			const float* minCorner;
+			const float* maxCorner;
+			float radius;
+
+			if (objectBounds(mesh, objectIndex, world, minCorner, maxCorner, radius) && radius > largestRadius)
+			{
+				largest = objectIndex;
+				largestRadius = radius;
+			}
+		}
+
+		return largest;
+	}
+
+	// The steering wheel body of a mesh without an LCD object: its static object with the largest bounding sphere, or its largest
+	// object when none of them has a name of GP4's cockpit objects
+	int mainWheelObject(BYTE* mesh)
+	{
+		int mainObject = largestObject(mesh, findExternalWheelObjects(mesh).statics);
+
+		if (mainObject == -1)
+		{
+			DWORD numObjects = field<DWORD>(mesh, MESH_NUM_OBJECTS);
+			vector<int> allObjects;
+
+			for (DWORD objectIndex = 0; numObjects <= MAX_MESH_OBJECTS && objectIndex < numObjects; objectIndex++)
+			{
+				allObjects.push_back((int)objectIndex);
+			}
+
+			mainObject = largestObject(mesh, allObjects);
+		}
+
+		return mainObject;
+	}
+
+	// Replaces CGP4LCD::Draw's FlushAllTextBatches?: GP4 draws the text on the origin plane of the mesh, which can be behind the screen.
+	// During our pass every label and value is moved together onto the LCD surface, so they keep their places on it
+	void __fastcall lcdTextFlushFunc(BYTE* language, void* /*edx*/, const D3DMATRIX* world)
+	{
+		if (!externalLcdPass || !lcdTextSurfaceSet || world == NULL)
+		{
+			FlushAllTextBatchesFunc(language, world);
+			return;
+		}
+
+		float z = matrixLocalZ(*world, lcdTextSurface);
+		float distance = fabsf(z) * sqrtf(world->_31 * world->_31 + world->_32 * world->_32 + world->_33 * world->_33);
+		bool usable = distance < LCD_TEXT_MAX_DEPTH;
+
+		if (find(lcdTextDepthLogged.begin(), lcdTextDepthLogged.end(), lcdTextSurfaceMesh) == lcdTextDepthLogged.end())
+		{
+			lcdTextDepthLogged.push_back(lcdTextSurfaceMesh);
+
+			string meshName = lcdTextSurfaceMesh != NULL ? string(reinterpret_cast<char*>(lcdTextSurfaceMesh + MESH_FILE_NAME)) : "flat steering wheel";
+
+			OutputGP4PPDebugString("Steering Wheels: external LCD text depth " + to_string(z) + ", " + to_string(distance) + " world units" + (usable ? "" : ", too far, ignored") + " [" + meshName + "]");
+		}
+
+		if (!usable)
+		{
+			// Left where GP4 puts it, so drawn without the depth test as in the cockpit
+			lcdTextDepthTest = false;
+
+			FlushAllTextBatchesFunc(language, world);
+			return;
+		}
+
+		D3DMATRIX shifted = matrixMultiply(matrixTranslation(0.0f, 0.0f, z), *world);
+
+		FlushAllTextBatchesFunc(language, &shifted);
 	}
 
 	// GP4 only fills and draws the LCD in the cockpit view: do both for the viewed car's 3D external wheel, as if it were the cockpit car
@@ -2117,6 +2344,46 @@ namespace SteeringWheels
 
 			MeshSetTransformFunc(textMesh, &world, -1);
 			MeshUpdateTransformsFunc(textMesh, -1, 0);
+		}
+
+		// Where the text goes: the face of the LCD object towards the driver, of the wheel body with AlwaysShow, or the flat wheel itself
+		BYTE* car = carAt(carIndex);
+
+		lcdTextSurfaceSet = false;
+		lcdTextSurfaceMesh = mesh;
+
+		if (car != NULL)
+		{
+			const D3DMATRIX& carMatrix = field<D3DMATRIX>(car, CAR_MATRIX);
+			float back[3] = { -carMatrix._31, -carMatrix._32, -carMatrix._33 };
+			float length = sqrtf(back[0] * back[0] + back[1] * back[1] + back[2] * back[2]);
+
+			if (mesh == NULL)
+			{
+				// The mesh origin is the centre of the flat quad
+				lcdTextSurface[0] = world._41;
+				lcdTextSurface[1] = world._42;
+				lcdTextSurface[2] = world._43;
+				lcdTextSurfaceSet = true;
+			}
+			else
+			{
+				lcdTextSurfaceSet = textMesh == mesh ? lcdFacePoint(mesh, back, lcdTextSurface) : objectFacePoint(mesh, mainWheelObject(mesh), back, lcdTextSurface);
+			}
+
+			for (int i = 0; lcdTextSurfaceSet && length > 0.0f && i < 3; i++)
+			{
+				lcdTextSurface[i] += back[i] / length * LCD_TEXT_SURFACE_OFFSET;
+			}
+		}
+
+		if (!lcdTextSurfaceSet && find(lcdTextDepthLogged.begin(), lcdTextDepthLogged.end(), mesh) == lcdTextDepthLogged.end())
+		{
+			lcdTextDepthLogged.push_back(mesh);
+
+			string meshName = mesh != NULL ? string(reinterpret_cast<char*>(mesh + MESH_FILE_NAME)) : "flat steering wheel";
+
+			OutputGP4PPDebugString("Steering Wheels: external LCD surface not found, text drawn without the depth test [" + meshName + "]");
 		}
 
 		if (!lcdLayoutsLoaded && cockpit != NULL && cockpit == cockpitObject)
@@ -2152,11 +2419,28 @@ namespace SteeringWheels
 			swapLcdLayout(lcd, *layout);
 		}
 
+		// EndScene turns the depth test off and leaves it off: what is drawn after this, the other cars' wheels included, needs it back
+		DWORD zEnable = D3DZB_TRUE;
+		DWORD zBias = 0;
+
+		DeviceGetRenderStateFunc(device, D3DRS_ZENABLE, &zEnable);
+		DeviceGetRenderStateFunc(device, D3DRS_ZBIAS, &zBias);
+
+		lcdTextDepthTest = lcdTextZEnablePatched && lcdTextFlushPatched && lcdTextSurfaceSet;
+
+		if (lcdTextDepthTest)
+		{
+			DeviceQueueRenderStateFunc(device, D3DRS_ZBIAS, LCD_TEXT_ZBIAS);
+		}
+
 		// The original Draw, the colour, scale and font hooks pick this car through viewedCar()
 		externalLcdPass = true;
 		LcdDrawFunc(lcd);
 		externalLcdPass = false;
 		externalLcdCar = data;
+
+		DeviceQueueRenderStateFunc(device, D3DRS_ZENABLE, zEnable);
+		DeviceQueueRenderStateFunc(device, D3DRS_ZBIAS, zBias);
 
 		if (layout != NULL)
 		{
@@ -3297,6 +3581,29 @@ namespace SteeringWheels
 			lcdTextDepthPatched = textCalls;
 
 			OutputGP4PPDebugString("Steering Wheels: external LCD labels on the screen : " + string(lcdTextDepthPatched ? "Applied" : "Not applied"));
+
+			bool zEnableCall = memcmp(MemUtils::addressToPtr<BYTE>(lcdTextZEnableCall - sizeof(lcdTextZEnableArgs)), lcdTextZEnableArgs, sizeof(lcdTextZEnableArgs)) == 0
+				&& checkCallTarget(lcdTextZEnableCall, DeviceQueueRenderState, "CGP4Font::EndScene ZENABLE");
+
+			if (zEnableCall)
+			{
+				MemUtils::injectFunctionCall(lcdTextZEnableCall, PtrToUlong(lcdTextZEnableFunc), VAR_NAME(lcdTextZEnableFunc));
+			}
+
+			lcdTextZEnablePatched = zEnableCall;
+
+			OutputGP4PPDebugString("Steering Wheels: external LCD text depth test : " + string(lcdTextZEnablePatched ? "Applied" : "Not applied"));
+
+			bool flushCall = checkCallTarget(lcdTextFlushCall, LanguageFlushAllTextBatches, "CGP4LCD::Draw FlushAllTextBatches");
+
+			if (flushCall)
+			{
+				MemUtils::injectFunctionCall(lcdTextFlushCall, PtrToUlong(lcdTextFlushFunc), VAR_NAME(lcdTextFlushFunc));
+			}
+
+			lcdTextFlushPatched = flushCall;
+
+			OutputGP4PPDebugString("Steering Wheels: external LCD text on the LCD surface : " + string(flushCall ? "Applied" : "Not applied"));
 
 			bool inputsCall = checkCallTarget(pitMenuInputsCall, ClearInputsInPitMenu, "ClearInputsInPitMenu call");
 

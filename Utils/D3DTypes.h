@@ -100,7 +100,12 @@ namespace GP4PP
 	const DWORD D3DTS_WORLD = 256;				// D3DTS_WORLDMATRIX(0)
 
 	// Render states (D3DRENDERSTATETYPE)
+	const DWORD D3DRS_ZENABLE = 7;
+	const DWORD D3DRS_ZBIAS = 47;
 	const DWORD D3DRS_NORMALIZENORMALS = 143;
+
+	// Z-buffer types (D3DZBUFFERTYPE)
+	const DWORD D3DZB_TRUE = 1;
 
 	// IDirect3DDevice8 vtable offsets
 	const DWORD D3DDEVICE8_SET_TRANSFORM = 0x94;
@@ -178,5 +183,27 @@ namespace GP4PP
 		result.m[1][1] = cosf(angle);
 
 		return result;
+	}
+
+	// The point (x, y, z, 1) transformed by an affine matrix
+	inline void matrixTransformPoint(const D3DMATRIX& matrix, float x, float y, float z, float result[3])
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			result[i] = x * matrix.m[0][i] + y * matrix.m[1][i] + z * matrix.m[2][i] + matrix.m[3][i];
+		}
+	}
+
+	// z of a point in the frame of an affine matrix with orthogonal axes, which can be scaled: only that coordinate of the inverse transform
+	inline float matrixLocalZ(const D3DMATRIX& matrix, const float point[3])
+	{
+		float lengthSq = matrix._31 * matrix._31 + matrix._32 * matrix._32 + matrix._33 * matrix._33;
+
+		if (!(lengthSq > 0.0f))
+		{
+			return 0.0f;
+		}
+
+		return ((point[0] - matrix._41) * matrix._31 + (point[1] - matrix._42) * matrix._32 + (point[2] - matrix._43) * matrix._33) / lengthSq;
 	}
 }
