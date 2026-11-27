@@ -19,6 +19,8 @@ FileName =
 UseCockpitMesh = false
 CockpitMeshScale = 0.7
 ShowLCD = false
+GlovesPosition = false
+GlovesIni = Gloves.ini
 
 [CockpitSteeringWheels]
 PerTeam = false
@@ -98,6 +100,17 @@ Scale of the 3D external steering wheels, applied to the whole mesh around its r
 When enabled, the LCD text is also shown on the external steering wheel of the car being viewed, from any external camera, TV camera or replay. It shows what the car's LCD would show in the cockpit view. Only the viewed car's steering wheel shows it. The [CockpitLCD](#CockpitLCD) settings apply: positions, font, colour and scale, per car included. While the player's car is in the pits and its LCD is shown this way, the pit menu can be navigated from that camera with the same controls as in the cockpit view.
 
 With `UseCockpitMesh` enabled, the text is shown on the 3D steering wheel when its mesh has an `LCD` object or when [AlwaysShow](#AlwaysShow) is enabled. On the flat steering wheels, the text is placed with the `LCD` object of the default `cockpit_wheel.gp4`, scaled by [CockpitMeshScale](#CockpitMeshScale); per-team or per-car `.pos` files can line it up with the screen on custom steering wheel textures.
+
+### GlovesPosition and GlovesIni
+
+When `GlovesPosition` is enabled, each car can move GP4's gloves on its external steering wheel, flat or 3D, to match its own steering wheel. The front ends of the arms (the wrists) move with the gloves, while the shoulders stay where they are. The positions are read from the INI file named by `GlovesIni` (default `Gloves.ini`), located in the same folder as the main `GP4PP.ini` file. It contains one section per car, named sequentially `Gloves1` to `Gloves22` (as `{driverindex}`), each with a `Position` entry:
+
+```ini
+[Gloves1]
+Position = 0.0, 0.0, 0.0
+```
+
+`Position` is an offset in metres from GP4's own glove position, given for the right glove; the left glove gets the same offset mirrored: a positive `x` moves the gloves apart, a positive `y` moves them up and a positive `z` moves them forward, away from the driver. The offset turns with the steering wheel. Cars without an entry keep GP4's glove position.
 
 ## CockpitSteeringWheels
 

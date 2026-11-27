@@ -157,5 +157,8 @@
     <CopyFileToFolders Include="Ini\LCD.ini">
       <Filter>Ini</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="Ini\Gloves.ini">
+      <Filter>Ini</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

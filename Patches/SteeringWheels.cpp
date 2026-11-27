@@ -70,6 +70,8 @@ namespace SteeringWheels
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
 	bool externalLcd = false;				// LCD on the viewed car's external wheel, flat or 3D
+	bool glovesPosition = false;			// per-car glove and wrist offsets on the external wheels, flat or 3D
+	IniFile glovesIni;						// per-car sections, read once the car count is known
 	bool lcdTextDepthPatched = false;
 	bool externalLcdPass = false;			// CGP4LCD::Draw runs for the external wheel
 	BYTE* externalLcdCar = NULL;			// car data the external wheel's LCD was last drawn for
@@ -158,6 +160,8 @@ namespace SteeringWheels
 	DWORD wheelVertexUnlock = 0x0048c32a;		// mov eax, [esi] - push esi - call [eax + 0x30], vertex buffer unlock
 	BYTE wheelIndexBlockAddBytes[] = { 0x81, 0xc1 };
 	BYTE wheelVertexUnlockBytes[] = { 0x8b, 0x06, 0x56, 0xff, 0x50, 0x30 };
+	DWORD wheelVertexBlockAdd = 0x0048b4ce;		// add eax, <offset of the last car's vertices>, eax = locked vertex buffer
+	BYTE wheelVertexBlockAddBytes[] = { 0x05 };
 
 	// Jump Back Addresses
 	DWORD wheelIndexBlockAddJumpBack = 0x0048b4d9;
@@ -379,6 +383,10 @@ namespace SteeringWheels
 	// Flat external wheel indices per car: 7 quads of 6 indices, wheel front, back, rev lights, gloves, arms
 	const int WHEEL_BLOCK_INDICES = 42;
 	const int WHEEL_ONLY_INDICES = 18;			// wheel front, back and rev lights, the gloves and arms follow
+	const int WHEEL_BLOCK_VERTICES = 28;
+	const int WHEEL_VERTEX_FLOATS = 6;			// x, y, z, colour, u, v
+	const int LEFT_GLOVE_VERTICES[] = { 12, 13, 14, 15, 20, 21 };	// glove quad, then the wrist end of the arm
+	const int RIGHT_GLOVE_VERTICES[] = { 16, 17, 18, 19, 24, 25 };
 
 	const int TWEAKER_STEER_POS_DRIVERS = 22;	// Tweaker caps the driver index (low 6 bits) at 21
 
@@ -607,6 +615,18 @@ namespace SteeringWheels
 	WORD* wheelIndexBuffer = NULL;		// locked index buffer of the current external draw
 	vector<int> hiddenWheelBlocks;		// blocks of the 3D wheel cars in the current external draw
 	bool wheelBlocksLogged = false;
+
+	struct GlovesOffset
+	{
+		bool set;
+		float x, y, z;
+	};
+
+	vector<GlovesOffset> glovesOffsets;		// per car, from glovesIni
+	int numGlovesCars = 0;
+	float* wheelVertices = NULL;			// locked vertex buffer of the current external draw
+	DWORD wheelVertexBlockOffset = 0;		// bytes from the start of the vertex buffer to the last car's vertices
+	vector<pair<int, int>> glovesWheelBlocks;	// block and car index of the cars whose gloves move in the current external draw
 	float (*tweakerSteerPos)[3] = NULL;	// set on the first draw when Tweaker's SteerPos is enabled, Tweaker loads after ApplyPatches
 	bool tweakerSteerPosChecked = false;
 	map<BYTE*, ExternalWheelObjects> externalWheelObjects;	// per cockpit wheel mesh
@@ -817,9 +837,22 @@ namespace SteeringWheels
 			return false;
 		}
 
+		// The vertices of the last car, same block as its indices
+		BYTE* vertexAdd = MemUtils::addressToPtr<BYTE>(wheelVertexBlockAdd);
+		DWORD vertexOffset = *reinterpret_cast<DWORD*>(vertexAdd + sizeof(wheelVertexBlockAddBytes));
+		DWORD vertexBlockSize = WHEEL_BLOCK_VERTICES * WHEEL_VERTEX_FLOATS * sizeof(float);
+
+		if (memcmp(vertexAdd, wheelVertexBlockAddBytes, sizeof(wheelVertexBlockAddBytes)) != 0 || vertexOffset != (offset / blockSize) * vertexBlockSize)
+		{
+			OutputGP4PPDebugString("Steering Wheels: unexpected vertex buffer size " + MemUtils::dwordToString(vertexOffset) + " in DrawCarSteeringWheels, no gloves and arms on the 3D external steering wheels");
+			return false;
+		}
+
 		wheelIndexBlockOffset = offset;
+		wheelVertexBlockOffset = vertexOffset;
 		numWheelBlocks = offset / blockSize + 1;
 		hiddenWheelBlocks.resize(numWheelBlocks);
+		glovesWheelBlocks.resize(numWheelBlocks);
 
 		OutputGP4PPDebugString("Steering Wheels: " + to_string(numWheelBlocks) + " cars in the external wheel buffers");
 
@@ -965,11 +998,35 @@ namespace SteeringWheels
 		return false;
 	}
 
-	void __cdecl hideMeshCarWheels()
+	float externalWheelAngle(BYTE* car);
+
+	void moveGloves(float* vertices, BYTE* car, const GlovesOffset& offset)
+	{
+		// GP4's glove transform without its translation: turned with the wheel, then with the car
+		D3DMATRIX rotation = matrixMultiply(matrixRotationZ(externalWheelAngle(car)), field<D3DMATRIX>(car, CAR_MATRIX));
+		float left[3], right[3];
+
+		// The left glove is the right one mirrored in the wheel's X
+		matrixTransformVector(rotation, -offset.x, offset.y, offset.z, left);
+		matrixTransformVector(rotation, offset.x, offset.y, offset.z, right);
+
+		for (int i = 0; i < _countof(LEFT_GLOVE_VERTICES); i++)
+		{
+			for (int j = 0; j < 3; j++)
+			{
+				vertices[LEFT_GLOVE_VERTICES[i] * WHEEL_VERTEX_FLOATS + j] += left[j];
+				vertices[RIGHT_GLOVE_VERTICES[i] * WHEEL_VERTEX_FLOATS + j] += right[j];
+			}
+		}
+	}
+
+	void __cdecl updateWheelBlocks()
 	{
 		BYTE* lodManager = MemUtils::addressToValue<BYTE*>(lodManagerPointer);
+		bool hide = wheelIndexBuffer != NULL && numFrameMeshCars > 0;
+		bool gloves = wheelVertices != NULL && numGlovesCars > 0;
 
-		if (wheelIndexBuffer == NULL || numFrameMeshCars == 0 || lodManager == NULL)
+		if (!(hide || gloves) || lodManager == NULL)
 		{
 			return;
 		}
@@ -981,6 +1038,7 @@ namespace SteeringWheels
 		int numFront = 0;
 		int numBack = 0;
 		int numHidden = 0;
+		int numGloves = 0;
 		bool matched = true;
 
 		for (DWORD entryIndex = 0; entryIndex < numEntries; entryIndex++, entry += LOD_ENTRY_SIZE)
@@ -1019,9 +1077,14 @@ namespace SteeringWheels
 
 			int block = (field<int>(car, CAR_WHEEL_TEXTURE) == -1) ? numFront++ : numWheelBlocks - 1 - numBack++;
 
-			if (isFrameMeshCar(car))
+			if (hide && isFrameMeshCar(car))
 			{
 				hiddenWheelBlocks[numHidden++] = block;
+			}
+
+			if (gloves && glovesOffsets[carIndex].set)
+			{
+				glovesWheelBlocks[numGloves++] = make_pair(block, carIndex);
 			}
 		}
 
@@ -1032,7 +1095,7 @@ namespace SteeringWheels
 			{
 				wheelBlocksLogged = true;
 
-				OutputGP4PPDebugString("Steering Wheels: external wheel buffer order not matched, flat wheel kept on the 3D wheel cars");
+				OutputGP4PPDebugString("Steering Wheels: external wheel buffer order not matched, flat wheel kept on the 3D wheel cars and gloves not moved");
 			}
 
 			return;
@@ -1049,12 +1112,25 @@ namespace SteeringWheels
 				indices[j] = first;
 			}
 		}
+
+		// Gloves and wrists by each car's offset, the shoulders stay
+		for (int i = 0; i < numGloves; i++)
+		{
+			float* vertices = wheelVertices + glovesWheelBlocks[i].first * WHEEL_BLOCK_VERTICES * WHEEL_VERTEX_FLOATS;
+
+			moveGloves(vertices, carAt(glovesWheelBlocks[i].second), glovesOffsets[glovesWheelBlocks[i].second]);
+		}
 	}
 
 	__declspec(naked) void wheelIndexBlockAddFunc()
 	{
-		//ECX - locked index buffer
+		//EAX - locked vertex buffer + offset of the last car's vertices, ECX - locked index buffer
 		__asm mov wheelIndexBuffer, ECX
+
+		__asm push EAX
+		__asm sub EAX, wheelVertexBlockOffset
+		__asm mov wheelVertices, EAX
+		__asm pop EAX
 
 		__asm add ECX, wheelIndexBlockOffset //original instruction, offset read from it
 
@@ -1067,7 +1143,7 @@ namespace SteeringWheels
 		__asm pushad
 		__asm pushfd
 
-		hideMeshCarWheels();
+		updateWheelBlocks();
 
 		__asm popfd
 		__asm popad
@@ -1089,6 +1165,7 @@ namespace SteeringWheels
 		numFrameMeshCars = numMeshCars;
 		frameSkipCar = (int)param;
 		wheelIndexBuffer = NULL;
+		wheelVertices = NULL;
 
 		int numChanged = 0;
 
@@ -3341,6 +3418,29 @@ namespace SteeringWheels
 
 		OutputGP4PPDebugString("ShowLCD " + externalSettings.name + ": " + (externalLcd ? "Enabled" : "Disabled"));
 
+		try
+		{
+			glovesPosition = iniSettings[externalSettings.section]["GlovesPosition"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString("GlovesPosition " + externalSettings.name + ": " + (glovesPosition ? "Enabled" : "Disabled"));
+
+		if (glovesPosition)
+		{
+			string iniFileName = "Gloves.ini";
+
+			try
+			{
+				iniFileName = iniSettings[externalSettings.section]["GlovesIni"].getString();
+			}
+			catch (exception ex) {}
+
+			glovesPosition = glovesIni.load(basePath + iniFileName);
+
+			OutputGP4PPDebugString((glovesPosition ? "Loaded " : "Failed to open ") + externalSettings.name + " Gloves INI: " + iniFileName);
+		}
+
 		loadAssetSettings(iniSettings, cockpitSettings);
 		loadAssetSettings(iniSettings, dashSettings);
 		loadAssetSettings(iniSettings, lcdSettings);
@@ -3464,12 +3564,48 @@ namespace SteeringWheels
 		}
 	}
 
+	// [Gloves<n>] Position = x, y, z, offsets from GP4's glove position, read once the car count is known
+	bool loadGlovesOffsets()
+	{
+		glovesOffsets.assign(numCars, GlovesOffset{ false, 0.0f, 0.0f, 0.0f });
+		numGlovesCars = 0;
+
+		for (int carIndex = 0; carIndex < numCars; carIndex++)
+		{
+			vector<float> position;
+
+			try
+			{
+				position = glovesIni["Gloves" + to_string(carIndex + 1)]["Position"].getVectorAs<float>();
+			}
+			catch (exception ex) {}
+
+			if (position.empty())
+			{
+				continue;
+			}
+
+			if (position.size() != 3)
+			{
+				OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " invalid gloves position, needs x, y, z");
+				continue;
+			}
+
+			glovesOffsets[carIndex] = { true, position[0], position[1], position[2] };
+			numGlovesCars++;
+
+			OutputGP4PPDebugString("Steering Wheels: " + carName(carIndex) + " gloves offset " + to_string(position[0]) + ", " + to_string(position[1]) + ", " + to_string(position[2]));
+		}
+
+		return numGlovesCars > 0;
+	}
+
 	void ApplyPatches()
 	{
 		bool lcdColourEnabled = lcdIndividual || lcdColour.getColour() != 0;
 		bool lcdScaleEnabled = lcdIndividual || lcdScale != 1.0f;
 		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled || lcdScaleEnabled;
-		bool externalEnabled = externalSettings.enabled || useCockpitMesh || externalLcd;
+		bool externalEnabled = externalSettings.enabled || useCockpitMesh || externalLcd || glovesPosition;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
 
 		// LCD font: GP4 creates it after this, in D3D_Init and on every language change
@@ -3534,9 +3670,11 @@ namespace SteeringWheels
 					readDynamicDataCount();
 				}
 
-				if (useCockpitMesh)
+				bool glovesOffsetsLoaded = glovesPosition && loadGlovesOffsets();
+
+				// GP4's gloves and arms on the 3D wheels, without it those cars skip the flat renderer, and the glove positions of every car
+				if (useCockpitMesh || glovesOffsetsLoaded)
 				{
-					// GP4's gloves and arms on the 3D wheels, without it those cars skip the flat renderer
 					if (readWheelBlockCount())
 					{
 						BYTE indexBlockAddPatch[] = { 0xe9, 0x00, 0x00, 0x00, 0x00, 0x90 };
@@ -3552,8 +3690,16 @@ namespace SteeringWheels
 
 						glovesPatched = true;
 					}
+				}
 
+				if (useCockpitMesh)
+				{
 					OutputGP4PPDebugString("Steering Wheels: gloves and arms on the 3D external steering wheels : " + string(glovesPatched ? "Applied" : "Not applied"));
+				}
+
+				if (glovesPosition)
+				{
+					OutputGP4PPDebugString("Steering Wheels: gloves position for " + to_string(numGlovesCars) + " car(s) : " + string(glovesOffsetsLoaded && glovesPatched ? "Applied" : "Not applied"));
 				}
 
 				externalPatched = true;

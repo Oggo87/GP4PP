@@ -194,6 +194,15 @@ namespace GP4PP
 		}
 	}
 
+	// The direction (x, y, z, 0) transformed by an affine matrix: rotation and scale only, no translation
+	inline void matrixTransformVector(const D3DMATRIX& matrix, float x, float y, float z, float result[3])
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			result[i] = x * matrix.m[0][i] + y * matrix.m[1][i] + z * matrix.m[2][i];
+		}
+	}
+
 	// z of a point in the frame of an affine matrix with orthogonal axes, which can be scaled: only that coordinate of the inverse transform
 	inline float matrixLocalZ(const D3DMATRIX& matrix, const float point[3])
 	{
