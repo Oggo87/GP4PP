@@ -1,13 +1,12 @@
 # General Settings
 
-This section contains seven entries:
+This section contains six entries:
 
 * [Disable CD Check](#Disable-CD-Check)
 * [Fix 3D Wheels](#Fix-3D-Wheels)
 * [Fix Projected Shadows](#Fix-Projected-Shadows)
 * [Track Folders](#Track-Folders)
 * [Cockpit Visor](#Cockpit-Visor)
-* [Steering Wheel Advanced Car Sahder](#Steering-Wheel-Advanced-Car-Shader)
 * [Show Opponents Fuel Laps](#Show-Opponents-Fuel-Laps)
 
 ```ini
@@ -18,7 +17,6 @@ Fix3DWheelsCockpitView = false
 FixProjectedShadows = false
 TrackFolders = false
 CockpitVisor = false
-StWheelAdvancedCarShader = false
 ShowOpponentsFuelLaps = false
 ```
 
@@ -88,9 +86,7 @@ Transparency = 0.5
 
 ## Steering Wheel Advanced Car Shader
 
-This setting allows to enable using GP4's built-in advanced car shader (the same one used for cars and helmets) for the in-cockpit steering wheel mesh, improving its appearance with better reflections and lighting effects.
-
-Advanced Car Shader does not support alpha-blending, so if the steering wheel mesh uses any alpha-blending textures (for example, for cutouts or holes in the mesh), those parts will appear fully opaque when this setting is enabled. It is intended to be used with full 3D steering wheel meshes that do not rely on alpha-blending.
+The `StWheelAdvancedCarShader` and `StWheelAdvancedCarShaderMainOnly` settings were superseded in 2.3.2 by [AdvancedCarShader](Steering-Wheels-Settings.md#AdvancedCarShader) in `[CockpitSteeringWheels]`, which keeps the lit objects on GP4's cockpit shader and lets track shadows darken the steering wheel. The old settings are ignored.
 
 ## Show Opponents Fuel Laps
 

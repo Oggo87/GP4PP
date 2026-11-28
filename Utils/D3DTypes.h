@@ -101,11 +101,32 @@ namespace GP4PP
 
 	// Render states (D3DRENDERSTATETYPE)
 	const DWORD D3DRS_ZENABLE = 7;
+	const DWORD D3DRS_ZWRITEENABLE = 14;
+	const DWORD D3DRS_ALPHATESTENABLE = 15;
+	const DWORD D3DRS_SRCBLEND = 19;
+	const DWORD D3DRS_DESTBLEND = 20;
+	const DWORD D3DRS_ZFUNC = 23;
+	const DWORD D3DRS_ALPHABLENDENABLE = 27;
+	const DWORD D3DRS_FOGENABLE = 28;
 	const DWORD D3DRS_ZBIAS = 47;
+	const DWORD D3DRS_TEXTUREFACTOR = 60;
 	const DWORD D3DRS_NORMALIZENORMALS = 143;
 
 	// Z-buffer types (D3DZBUFFERTYPE)
 	const DWORD D3DZB_TRUE = 1;
+
+	// Blend modes (D3DBLEND) and compare functions (D3DCMPFUNC)
+	const DWORD D3DBLEND_ZERO = 1;
+	const DWORD D3DBLEND_SRCCOLOR = 3;
+	const DWORD D3DCMP_LESSEQUAL = 4;
+
+	// Texture stage states (D3DTEXTURESTAGESTATETYPE), operations (D3DTEXTUREOP) and arguments (D3DTA_*)
+	const DWORD D3DTSS_COLOROP = 1;
+	const DWORD D3DTSS_COLORARG1 = 2;
+	const DWORD D3DTSS_ALPHAOP = 4;
+	const DWORD D3DTSS_ALPHAARG1 = 5;
+	const DWORD D3DTOP_SELECTARG1 = 2;
+	const DWORD D3DTA_TFACTOR = 3;
 
 	// IDirect3DDevice8 vtable offsets
 	const DWORD D3DDEVICE8_SET_TRANSFORM = 0x94;
@@ -181,6 +202,37 @@ namespace GP4PP
 		result.m[0][1] = sinf(angle);
 		result.m[1][0] = -sinf(angle);
 		result.m[1][1] = cosf(angle);
+
+		return result;
+	}
+
+	// Inverse of an affine matrix (rotation, scale and translation, last column 0, 0, 0, 1), same result as D3DXMatrixInverse
+	inline D3DMATRIX matrixInverseAffine(const D3DMATRIX& m)
+	{
+		D3DMATRIX result = matrixIdentity();
+		float det = m._11 * (m._22 * m._33 - m._23 * m._32) - m._12 * (m._21 * m._33 - m._23 * m._31) + m._13 * (m._21 * m._32 - m._22 * m._31);
+
+		if (det == 0.0f)
+		{
+			return result;
+		}
+
+		float inv = 1.0f / det;
+
+		result._11 = (m._22 * m._33 - m._23 * m._32) * inv;
+		result._12 = (m._13 * m._32 - m._12 * m._33) * inv;
+		result._13 = (m._12 * m._23 - m._13 * m._22) * inv;
+		result._21 = (m._23 * m._31 - m._21 * m._33) * inv;
+		result._22 = (m._11 * m._33 - m._13 * m._31) * inv;
+		result._23 = (m._13 * m._21 - m._11 * m._23) * inv;
+		result._31 = (m._21 * m._32 - m._22 * m._31) * inv;
+		result._32 = (m._12 * m._31 - m._11 * m._32) * inv;
+		result._33 = (m._11 * m._22 - m._12 * m._21) * inv;
+
+		for (int i = 0; i < 3; i++)
+		{
+			result.m[3][i] = -(m._41 * result.m[0][i] + m._42 * result.m[1][i] + m._43 * result.m[2][i]);
+		}
 
 		return result;
 	}

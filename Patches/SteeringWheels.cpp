@@ -70,6 +70,8 @@ namespace SteeringWheels
 	const float DEFAULT_COCKPIT_MESH_SCALE = 0.7f;
 	float cockpitMeshScale = DEFAULT_COCKPIT_MESH_SCALE;
 	bool externalLcd = false;				// LCD on the viewed car's external wheel, flat or 3D
+	bool advancedCarShader = false;			// [CockpitSteeringWheels] AdvancedCarShader: unlit objects on the advanced car shader, lit ones and the LCD on the cockpit shader
+	bool advancedCarShaderPatched = false;
 	bool glovesPosition = false;			// per-car glove and wrist offsets on the external wheels, flat or 3D
 	IniFile glovesIni;						// per-car sections, read once the car count is known
 	bool lcdTextDepthPatched = false;
@@ -163,6 +165,11 @@ namespace SteeringWheels
 	DWORD wheelVertexBlockAdd = 0x0048b4ce;		// add eax, <offset of the last car's vertices>, eax = locked vertex buffer
 	BYTE wheelVertexBlockAddBytes[] = { 0x05 };
 
+	// CGP4SteeringWheelShader::Render: call [edx + 0x94], SetTransform(D3DTS_TEXTURE1) of the light map, after push 0x11
+	DWORD wheelLightMapTransformCall = 0x00460c81;
+	BYTE wheelLightMapTransformBytes[] = { 0xff, 0x92, 0x94, 0x00, 0x00, 0x00 };
+	BYTE wheelLightMapTransformArgs[] = { 0x6a, 0x11 };		// at the call - 5: push 0x11 - mov edx, [eax] - push eax
+
 	// Jump Back Addresses
 	DWORD wheelIndexBlockAddJumpBack = 0x0048b4d9;
 	DWORD wheelVertexUnlockJumpBack = 0x0048c330;
@@ -179,7 +186,8 @@ namespace SteeringWheels
 	DWORD stWheelTextureIndex = 0x00644bbc;
 	DWORD stWheelVertexBuffer = 0x00a4d698;
 	DWORD cockpitObjectNames = 0x006412f8;
-	DWORD cockpitWheelShaderPush = 0x0046faf2;	// push <shader id>, patched by StWheelAdvancedCarShader
+	DWORD cockpitWheelShaderPush = 0x0046faf2;	// push <shader id>, patched by AdvancedCarShader
+	BYTE cockpitWheelShaderPushBytes[] = { 0x6a, 0x13 };	// push 0x13 (CGP4SteeringWheelShader)
 	DWORD cockpitDashShaderPush = 0x0046f9bc;	// push <shader id>
 	DWORD cockpitPointer = 0x00a4fcc8;			// CGP4Cockpit*
 	DWORD lodManagerPointer = 0x00a4f55c;
@@ -248,6 +256,17 @@ namespace SteeringWheels
 	DWORD CockpitSetMeshTransforms = 0x0046fdc0;
 	DWORD DeviceGetRenderState = 0x0044d3b0;
 	DWORD DeviceQueueRenderState = 0x0044d290;
+	DWORD DeviceQueueTextureStageState = 0x0044d310;
+	DWORD CockpitDrawMeshes = 0x0046ff30;
+	DWORD GetObjectShader = 0x00457510;
+
+	// Track shadows on the advanced car shader objects of the steering wheels
+	DWORD wheelShaderFlushCall = 0x00460e47;	// CGP4SteeringWheelShader::Render: call FlushQueuedStates before its draw
+	DWORD cockpitDrawMeshesCall = 0x0049cf9b;	// call CGP4Cockpit::DrawMeshes(viewed car's lightMapCh3Texture)
+	DWORD advCarShaderLightMapPass = 0x0063e194;	// dword, set by CGP4Car::SetupPartForDraw? for the last car part drawn
+	DWORD cockpitObjectIsLit = 0x00641790;		// byte[NUM_COCKPIT_OBJECTS]
+	DWORD cockpitFirstPassDraw = 0x0046ffe6;	// CGP4Cockpit::DrawMeshes, first pass: mov edx, [ecx] - call [edx + 0x10], ecx = dash then wheel mesh
+	BYTE cockpitFirstPassDrawBytes[] = { 0x8b, 0x11, 0xff, 0x52, 0x10 };
 
 	// Function Pointer Types
 	typedef void(__cdecl* InitCarSteeringWheelsType)(BYTE*);
@@ -286,6 +305,9 @@ namespace SteeringWheels
 	typedef void(__thiscall* MeshDrawType)(BYTE*, int, void*, char);
 	typedef int(__thiscall* DeviceGetRenderStateType)(BYTE*, DWORD, DWORD*);
 	typedef int(__thiscall* DeviceQueueRenderStateType)(BYTE*, DWORD, DWORD);
+	typedef int(__thiscall* DeviceQueueTextureStageStateType)(BYTE*, DWORD, DWORD, DWORD);
+	typedef void(__thiscall* CockpitDrawMeshesType)(BYTE*, int);
+	typedef BYTE* (__thiscall* GetObjectShaderType)(BYTE*, int);
 
 	// Function Pointers
 	InitCarSteeringWheelsType InitCarSteeringWheelsFunc = (InitCarSteeringWheelsType)InitCarSteeringWheels;
@@ -323,12 +345,15 @@ namespace SteeringWheels
 	CockpitSetMeshTransformsType CockpitSetMeshTransformsFunc = (CockpitSetMeshTransformsType)CockpitSetMeshTransforms;
 	DeviceGetRenderStateType DeviceGetRenderStateFunc = (DeviceGetRenderStateType)DeviceGetRenderState;
 	DeviceQueueRenderStateType DeviceQueueRenderStateFunc = (DeviceQueueRenderStateType)DeviceQueueRenderState;
+	DeviceQueueTextureStageStateType DeviceQueueTextureStageStateFunc = (DeviceQueueTextureStageStateType)DeviceQueueTextureStageState;
+	CockpitDrawMeshesType CockpitDrawMeshesFunc = (CockpitDrawMeshesType)CockpitDrawMeshes;
+	GetObjectShaderType GetObjectShaderFunc = (GetObjectShaderType)GetObjectShader;
 
 	// Structure offsets
 	const DWORD CAR_DRIVER_INDEX = 0x1c;
 	const DWORD CAR_TEAM_INDEX = 0x20;
 	const DWORD CAR_TEAM_CAR = 0x24;			// 0 or 1, first or second car of the team
-	const DWORD CAR_WHEEL_TEXTURE = 0xd0;
+	const DWORD CAR_WHEEL_TEXTURE = 0xd0;		// int, the car's track shadow texture (lightMapCh3Texture), also used to pass the per-car flat wheel texture
 	const DWORD CAR_MATRIX = 0x334;
 	const DWORD CAR_WHEEL_VISIBLE = 0x814;		// byte, external steering wheel drawn when non-zero
 	const DWORD CAR_STEERING_ANGLE = 0x4a28;
@@ -394,6 +419,7 @@ namespace SteeringWheels
 	const DWORD DEVICE_D3D_DEVICE = 0x08;
 	const DWORD DEVICE_WORLD_MATRIX = 0x2018;
 	const DWORD DEVICE_CURRENT_SHADER = 0x24a0;
+	const DWORD DEVICE_INVERSE_VIEW = 0x2420;
 	const DWORD DEVICE_STAGE0_TEXTURE = 0x1f7c;
 	const DWORD DEVICE_STAGE1_TEXTURE = 0x1f80;
 	const DWORD DEVICE_STAGE0_DIRTY = 0x1f9c;
@@ -409,6 +435,7 @@ namespace SteeringWheels
 	const DWORD TEXTURE_D3D_TEXTURE = 0x38;
 
 	const DWORD COCKPIT_DEVICE = 0x4c;
+	const DWORD COCKPIT_CAMERA_MODE = 0x54;		// DrawMeshes only draws when 0
 	const DWORD COCKPIT_MESH_SELECTORS = 0x98;
 	const DWORD COCKPIT_OBJECT_INDICES = 0x530;
 	const DWORD COCKPIT_DASH_MESH = 0xd88;
@@ -513,6 +540,7 @@ namespace SteeringWheels
 	const int COCKPIT_GEAR_R = 0xd9;
 
 	const BYTE COCKPIT_LIGHT_MAP_SHADER = 0x13;
+	const BYTE ADVANCED_CAR_SHADER = 0x12;
 	const DWORD SHADER_LIGHT_MAP = 0x60;
 	const DWORD MESH_DRAW = 0x10;				// CGP4Mesh vtable offset
 
@@ -523,6 +551,9 @@ namespace SteeringWheels
 	const DWORD MESH_OBJECT_SIZE = 0x34;
 	const DWORD MESH_OBJECT_DATA = 0x08;
 	const DWORD MESH_OBJECT_INDEX = 0x0c;
+	const DWORD OBJECT_DATA_STATES = 0x00;		// object data arrObjectState_0x0, CGP4MeshObjectState[]
+	const DWORD OBJECT_STATE_SIZE = 0x14;
+	const DWORD OBJECT_STATE_DRAWN = 0x08;
 	const DWORD OBJECT_DATA_FLAGS = 0x00;
 	const DWORD OBJECT_DATA_BOUNDS = 0x04;		// CGP4MeshObjectData arrBounds_0x4, OBJECT_BOUNDS_SIZE per object
 	const DWORD OBJECT_DATA_TRANSFORMS = 0x08;
@@ -589,6 +620,9 @@ namespace SteeringWheels
 	struct ExternalWheelObjects
 	{
 		vector<int> statics = {};
+		vector<int> litStatics = {};				// the static objects GP4 lights up (the labels), drawn without the track shadow
+		vector<int> advancedStatics = {};			// the unlit static objects using the advanced car shader
+		vector<int> lcds = {};						// LCD, LCD[0], LCD[1]...: lit as in the cockpit, drawn without the track shadow
 		int revOn[2][NUM_REV_LIGHTS] = {};		// left, right
 		int flagOn[2][NUM_FLAG_LIGHTS] = {};		// left, right
 		int gears[NUM_GEARS] = {};
@@ -627,6 +661,20 @@ namespace SteeringWheels
 	float* wheelVertices = NULL;			// locked vertex buffer of the current external draw
 	DWORD wheelVertexBlockOffset = 0;		// bytes from the start of the vertex buffer to the last car's vertices
 	vector<pair<int, int>> glovesWheelBlocks;	// block and car index of the cars whose gloves move in the current external draw
+	vector<int> frameWheelCars;				// cars of the current flat external draw, in GP4's order
+	bool frameWheelCarsMatched = false;		// false when GP4's order could not be followed
+	vector<int> lightMapWheelCars;			// those in the light map group, in GP4's draw order
+	vector<int> carShadowTexture;			// per car, its track shadow texture before the flat wheel texture replaced it
+	int lightMapDrawIndex = 0;				// light map group draws flushed so far in the current flat external draw
+	bool lightMapOrderLogged = false;
+	bool wheelLightMapPatched = false;
+	bool shadowMultiplyPass = false;		// the steering wheel shader's draw multiplies the frame by its light map
+	bool wheelShaderFlushPatched = false;
+	bool cockpitShadowPatched = false;
+	BYTE* drawMeshesCockpit = NULL;		// CGP4Cockpit::DrawMeshes running, for its first pass
+	int drawMeshesLightMap = -1;
+	bool externalLightMapPass = false;		// unlit objects of a 3D external wheel: the light map projected in car space
+	D3DMATRIX externalLightMapMatrix = {};
 	float (*tweakerSteerPos)[3] = NULL;	// set on the first draw when Tweaker's SteerPos is enabled, Tweaker loads after ApplyPatches
 	bool tweakerSteerPosChecked = false;
 	map<BYTE*, ExternalWheelObjects> externalWheelObjects;	// per cockpit wheel mesh
@@ -776,6 +824,7 @@ namespace SteeringWheels
 		numTeams = numCars / 2;
 
 		carTextureIndex.assign(numCars, -1);
+		carShadowTexture.assign(numCars, -1);
 		promotionLogged.assign(numCars, false);
 		changedCars.resize(numCars);
 		oldTextures.resize(numCars);
@@ -1020,32 +1069,27 @@ namespace SteeringWheels
 		}
 	}
 
-	void __cdecl updateWheelBlocks()
+	// DrawCarSteeringWheels' car selection, in its order: false when GP4's order can't be followed
+	bool flatWheelCars(int skipCar, vector<int>& cars)
 	{
 		BYTE* lodManager = MemUtils::addressToValue<BYTE*>(lodManagerPointer);
-		bool hide = wheelIndexBuffer != NULL && numFrameMeshCars > 0;
-		bool gloves = wheelVertices != NULL && numGlovesCars > 0;
 
-		if (!(hide || gloves) || lodManager == NULL)
+		cars.clear();
+
+		if (lodManager == NULL)
 		{
-			return;
+			return false;
 		}
 
-		// Same car selection and buffer order as DrawCarSteeringWheels: no light map from the start, light map from the end
 		float maxDistance = MemUtils::addressToValue<float>(stWheelMaxDistance);
 		DWORD numEntries = field<DWORD>(lodManager, LOD_NUM_ENTRIES);
 		BYTE* entry = lodManager + LOD_ENTRIES;
-		int numFront = 0;
-		int numBack = 0;
-		int numHidden = 0;
-		int numGloves = 0;
-		bool matched = true;
 
 		for (DWORD entryIndex = 0; entryIndex < numEntries; entryIndex++, entry += LOD_ENTRY_SIZE)
 		{
 			int carIndex = field<int>(entry, LOD_ENTRY_CAR);
 
-			if (frameSkipCar != -1 && carIndex == frameSkipCar)
+			if (skipCar != -1 && carIndex == skipCar)
 			{
 				continue;
 			}
@@ -1060,14 +1104,38 @@ namespace SteeringWheels
 			if (car == NULL)
 			{
 				// GP4 does not check the car index, so the buffer order can't be followed
-				matched = false;
-				break;
+				return false;
 			}
 
-			if (field<BYTE>(car, CAR_WHEEL_VISIBLE) == 0)
+			if (field<BYTE>(car, CAR_WHEEL_VISIBLE) != 0)
 			{
-				continue;
+				cars.push_back(carIndex);
 			}
+		}
+
+		return true;
+	}
+
+	void __cdecl updateWheelBlocks()
+	{
+		bool hide = wheelIndexBuffer != NULL && numFrameMeshCars > 0;
+		bool gloves = wheelVertices != NULL && numGlovesCars > 0;
+
+		if (!(hide || gloves))
+		{
+			return;
+		}
+
+		// Same car selection and buffer order as DrawCarSteeringWheels: no light map from the start, light map from the end
+		int numFront = 0;
+		int numBack = 0;
+		int numHidden = 0;
+		int numGloves = 0;
+		bool matched = frameWheelCarsMatched;
+
+		for (int carIndex : frameWheelCars)
+		{
+			BYTE* car = carAt(carIndex);
 
 			if (numFront + numBack >= numWheelBlocks)
 			{
@@ -1183,8 +1251,24 @@ namespace SteeringWheels
 			oldTextures[numChanged] = field<int>(car, CAR_WHEEL_TEXTURE);
 			numChanged++;
 
+			// The field is the car's track shadow, put back on its draw by individualWheelFlushFunc
+			carShadowTexture[carIndex] = field<int>(car, CAR_WHEEL_TEXTURE);
 			field<int>(car, CAR_WHEEL_TEXTURE) = carTextureIndex[carIndex];
 		}
+
+		// GP4's order, with the cars' light map choice as the original call sees it
+		frameWheelCarsMatched = flatWheelCars((int)param, frameWheelCars);
+		lightMapWheelCars.clear();
+
+		for (int carIndex : frameWheelCars)
+		{
+			if (field<int>(carAt(carIndex), CAR_WHEEL_TEXTURE) != -1)
+			{
+				lightMapWheelCars.push_back(carIndex);
+			}
+		}
+
+		lightMapDrawIndex = 0;
 
 		if (!firstDrawLogged)
 		{
@@ -1225,26 +1309,64 @@ namespace SteeringWheels
 			DWORD stageOneTexture = field<DWORD>(device, DEVICE_STAGE1_TEXTURE);
 			BYTE* manager = field<BYTE*>(device, DEVICE_MANAGER);
 
-			for (int carIndex = 0; stageOneTexture != 0 && carIndex < numCars; carIndex++)
+			// One flush per light map group car, in the order GP4 filled them
+			int drawIndex = lightMapDrawIndex++;
+			bool ordered = frameWheelCarsMatched && (int)frameWheelCars.size() == MemUtils::addressToValue<int>(stWheelCarsDrawn) && drawIndex < (int)lightMapWheelCars.size();
+			int carIndex = -1;
+
+			if (ordered)
 			{
-				// Only promote textures that are ours, leave any other GP4 overlay untouched
-				if (carTextureIndex[carIndex] >= 0 && textureD3DPointer(manager, carTextureIndex[carIndex]) == stageOneTexture)
+				int orderedCar = lightMapWheelCars[drawIndex];
+
+				// A car with its own track shadow and no texture of ours keeps GP4's draw as it is
+				if (carTextureIndex[orderedCar] >= 0)
 				{
-					field<DWORD>(device, DEVICE_STAGE0_TEXTURE) = stageOneTexture;
-					field<DWORD>(device, DEVICE_STAGE1_TEXTURE) = 0;
-					field<BYTE>(device, DEVICE_STAGE0_DIRTY) = 1;
-					field<BYTE>(device, DEVICE_STAGE1_DIRTY) = 1;
-					field<BYTE>(device, DEVICE_TEXTURES_DIRTY) = 1;
-
-					// Cars sharing a texture match the first of them, so this is logged once per texture
-					if (!promotionLogged[carIndex])
+					if (textureD3DPointer(manager, carTextureIndex[orderedCar]) == stageOneTexture)
 					{
-						promotionLogged[carIndex] = true;
-
-						OutputGP4PPDebugString("Steering Wheels: external texture at index " + to_string(carTextureIndex[carIndex]) + " bound to stage 0");
+						carIndex = orderedCar;
 					}
+					else
+					{
+						ordered = false;
+					}
+				}
+			}
 
-					break;
+			if (!ordered)
+			{
+				if (!lightMapOrderLogged)
+				{
+					lightMapOrderLogged = true;
+
+					OutputGP4PPDebugString("Steering Wheels: external wheel light map order not matched, no track shadows on the per-car flat external steering wheels");
+				}
+
+				// Without the order, the first car using the texture: only promote textures that are ours, leave any other GP4 overlay untouched
+				for (int i = 0; stageOneTexture != 0 && i < numCars; i++)
+				{
+					if (carTextureIndex[i] >= 0 && textureD3DPointer(manager, carTextureIndex[i]) == stageOneTexture)
+					{
+						carIndex = i;
+						break;
+					}
+				}
+			}
+
+			if (carIndex != -1)
+			{
+				// Our texture as the wheel texture, the car's own track shadow back on stage 1, where GP4 set its projection
+				field<DWORD>(device, DEVICE_STAGE0_TEXTURE) = stageOneTexture;
+				field<DWORD>(device, DEVICE_STAGE1_TEXTURE) = ordered ? textureD3DPointer(manager, carShadowTexture[carIndex]) : 0;
+				field<BYTE>(device, DEVICE_STAGE0_DIRTY) = 1;
+				field<BYTE>(device, DEVICE_STAGE1_DIRTY) = 1;
+				field<BYTE>(device, DEVICE_TEXTURES_DIRTY) = 1;
+
+				// Logged once per car
+				if (!promotionLogged[carIndex])
+				{
+					promotionLogged[carIndex] = true;
+
+					OutputGP4PPDebugString("Steering Wheels: external texture at index " + to_string(carTextureIndex[carIndex]) + " bound to stage 0");
 				}
 			}
 		}
@@ -1259,7 +1381,7 @@ namespace SteeringWheels
 
 	BYTE cockpitShader(DWORD shaderPushAddress, const string& name)
 	{
-		// Follow whatever shader GP4 uses for the vanilla mesh (0x13, or 0x12 for the wheel with StWheelAdvancedCarShader)
+		// Follow whatever shader GP4 uses for the vanilla mesh (0x13, or 0x12 for the wheel with AdvancedCarShader)
 		BYTE* shaderPush = MemUtils::addressToPtr<BYTE>(shaderPushAddress);
 
 		if (shaderPush[0] == 0x6a)
@@ -1290,6 +1412,88 @@ namespace SteeringWheels
 		{
 			SetObjectVisibleFunc(mesh, 0, objectIndex);
 		}
+	}
+
+	// Name of a mesh object as stored in its file, NULL when the object has no info
+	const char* meshObjectName(BYTE* mesh, int objectIndex)
+	{
+		BYTE* record = field<BYTE*>(mesh, MESH_OBJECTS) + objectIndex * MESH_OBJECT_SIZE;
+		BYTE* data = field<BYTE*>(record, MESH_OBJECT_DATA);
+
+		if (data == NULL || field<BYTE*>(data, OBJECT_DATA_INFO) == NULL)
+		{
+			return NULL;
+		}
+
+		return reinterpret_cast<const char*>(field<BYTE*>(data, OBJECT_DATA_INFO) + field<int>(record, MESH_OBJECT_INDEX) * OBJECT_INFO_SIZE);
+	}
+
+	// LCD, LCD[0], LCD[1]...: without case, as GetObjectIndexByName compares
+	bool isLcdObjectName(const char* name)
+	{
+		return name != NULL && _strnicmp(name, "LCD", 3) == 0 && (name[3] == '\0' || name[3] == '[');
+	}
+
+	// GP4's list of the cockpit objects drawn without the track shadow: all but steering_wheel and the *_off objects
+	bool cockpitSlotLit(int slot)
+	{
+		return MemUtils::addressToPtr<BYTE>(cockpitObjectIsLit)[slot] != 0;
+	}
+
+	// Advanced car shader on the unlit objects only: every object GP4 lights up (g_cockpitObjectIsLit, LCD included) and the
+	// parts of a split LCD (LCD[n]) get the cockpit shader back; steering_wheel, the *_off objects and the objects GP4 does not
+	// know keep the advanced car shader. Names compare without case, and every object with a matching name is changed, not
+	// only the first one GetObjectIndexByName finds
+	void applyUnlitObjectShader(BYTE* mesh, BYTE shader, const string& name)
+	{
+		if (!advancedCarShader || mesh == NULL)
+		{
+			return;
+		}
+
+		if (shader == COCKPIT_LIGHT_MAP_SHADER)
+		{
+			OutputGP4PPDebugString("Steering Wheels: " + name + " uses the cockpit shader, AdvancedCarShader has no effect");
+			return;
+		}
+
+		BYTE* cockpitShaderObject = GetShaderFunc(COCKPIT_LIGHT_MAP_SHADER);
+		DWORD numObjects = field<DWORD>(mesh, MESH_NUM_OBJECTS);
+
+		if (cockpitShaderObject == NULL || field<BYTE*>(mesh, MESH_OBJECTS) == NULL || numObjects > MAX_MESH_OBJECTS)
+		{
+			return;
+		}
+
+		const char** objectNames = MemUtils::addressToPtr<const char*>(cockpitObjectNames);
+		int numKept = 0;
+
+		for (DWORD objectIndex = 0; objectIndex < numObjects; objectIndex++)
+		{
+			const char* objectName = meshObjectName(mesh, (int)objectIndex);
+
+			if (objectName == NULL)
+			{
+				continue;
+			}
+
+			// The LCD split into LCD[0], LCD[1]... is lit as LCD is
+			bool keep = isLcdObjectName(objectName);
+
+			// The objects GP4 lights up keep its cockpit shader, as they are drawn without the track shadow
+			for (int slot = 0; !keep && slot < NUM_COCKPIT_OBJECTS; slot++)
+			{
+				keep = cockpitSlotLit(slot) && objectNames[slot] != NULL && _stricmp(objectName, objectNames[slot]) == 0;
+			}
+
+			if (keep)
+			{
+				ApplyShaderToObjectFunc(mesh, cockpitShaderObject, (int)objectIndex, 1);
+				numKept++;
+			}
+		}
+
+		OutputGP4PPDebugString("Steering Wheels: " + name + " advanced car shader on " + to_string(numObjects - numKept) + " unlit object(s), " + to_string(numKept) + " lit and LCD object(s) on the cockpit shader");
 	}
 
 	bool initParentLinks(BYTE* mesh)
@@ -1451,6 +1655,8 @@ namespace SteeringWheels
 
 		ApplyShaderToObjectFunc(mesh, shaderObject, -1, 1);
 
+		applyUnlitObjectShader(mesh, shader, "cockpit steering wheel [" + entry.fileName + "]");
+
 		hideAllObjects(mesh);
 
 		entry.loaded = true;
@@ -1594,6 +1800,9 @@ namespace SteeringWheels
 
 		BYTE dashShader = cockpitShader(cockpitDashShaderPush, "cockpit dash");
 		BYTE wheelShader = cockpitShader(cockpitWheelShaderPush, "cockpit wheel");
+
+		// GP4's CGP4Cockpit::LoadMesh has already applied its shader to the default wheel
+		applyUnlitObjectShader(wheelMesh, wheelShader, "default cockpit steering wheel");
 
 		cockpitDashMeshes.reserve(numCars);
 		cockpitWheelMeshes.reserve(numCars);
@@ -2279,17 +2488,7 @@ namespace SteeringWheels
 
 		for (DWORD objectIndex = 0; objects != NULL && numObjects <= MAX_MESH_OBJECTS && objectIndex < numObjects; objectIndex++)
 		{
-			BYTE* record = objects + objectIndex * MESH_OBJECT_SIZE;
-			BYTE* data = field<BYTE*>(record, MESH_OBJECT_DATA);
-
-			if (data == NULL || field<BYTE*>(data, OBJECT_DATA_INFO) == NULL)
-			{
-				continue;
-			}
-
-			const char* name = reinterpret_cast<const char*>(field<BYTE*>(data, OBJECT_DATA_INFO) + field<int>(record, MESH_OBJECT_INDEX) * OBJECT_INFO_SIZE);
-
-			if (_strnicmp(name, "LCD", 3) != 0 || (name[3] != '\0' && name[3] != '['))
+			if (!isLcdObjectName(meshObjectName(mesh, (int)objectIndex)))
 			{
 				continue;
 			}
@@ -2768,10 +2967,38 @@ namespace SteeringWheels
 			if (objectIndex != -1)
 			{
 				objects.push_back(objectIndex);
+
+				if (cockpitSlotLit(cockpitObject))
+				{
+					wheelObjects.litStatics.push_back(objectIndex);
+				}
 			}
 		}
 
-		OutputGP4PPDebugString("Steering Wheels: 3D external steering wheel uses " + to_string(objects.size()) + " static object(s), " + to_string(numRevLights) + " rev light(s), " + to_string(numFlagLights) + " flag light(s) and " + to_string(numGears) + " gear(s) of the cockpit steering wheel mesh at " + MemUtils::dwordToString(PtrToUlong(mesh)));
+		// The unlit ones the advanced car shader draws get the track shadow from a pass of their own
+		BYTE* advancedShader = GetShaderFunc(ADVANCED_CAR_SHADER);
+
+		for (int objectIndex : objects)
+		{
+			if (advancedShader != NULL && GetObjectShaderFunc(mesh, objectIndex) == advancedShader
+				&& find(wheelObjects.litStatics.begin(), wheelObjects.litStatics.end(), objectIndex) == wheelObjects.litStatics.end())
+			{
+				wheelObjects.advancedStatics.push_back(objectIndex);
+			}
+		}
+
+		// The LCD, which the cockpit draws over the steering wheel in its lit pass: names compare without case
+		DWORD numMeshObjects = field<DWORD>(mesh, MESH_NUM_OBJECTS);
+
+		for (DWORD objectIndex = 0; field<BYTE*>(mesh, MESH_OBJECTS) != NULL && numMeshObjects <= MAX_MESH_OBJECTS && objectIndex < numMeshObjects; objectIndex++)
+		{
+			if (isLcdObjectName(meshObjectName(mesh, (int)objectIndex)))
+			{
+				wheelObjects.lcds.push_back((int)objectIndex);
+			}
+		}
+
+		OutputGP4PPDebugString("Steering Wheels: 3D external steering wheel uses " + to_string(objects.size()) + " static object(s) (" + to_string(wheelObjects.advancedStatics.size()) + " with the advanced car shader), " + to_string(numRevLights) + " rev light(s), " + to_string(numFlagLights) + " flag light(s) and " + to_string(numGears) + " gear(s) of the cockpit steering wheel mesh at " + MemUtils::dwordToString(PtrToUlong(mesh)));
 
 		// Other displays, counted per display as their objects are often part of the dash mesh instead
 		string displayCounts;
@@ -2817,12 +3044,234 @@ namespace SteeringWheels
 		drawnMeshes.push_back(mesh);
 	}
 
+	void setStaticObjects(BYTE* mesh, const ExternalWheelObjects& wheelObjects, bool visible)
+	{
+		for (int objectIndex : wheelObjects.statics)
+		{
+			SetObjectVisibleFunc(mesh, visible ? 1 : 0, objectIndex);
+		}
+	}
+
 	void showObject(BYTE* mesh, int objectIndex, bool visible)
 	{
 		if (objectIndex != -1)
 		{
 			SetObjectVisibleFunc(mesh, visible ? 1 : 0, objectIndex);
 		}
+	}
+
+	// The LCD objects, only in the draw without the track shadow, as the cockpit draws them in its lit pass
+	void showLcdObjects(BYTE* mesh, const ExternalWheelObjects& wheelObjects, bool visible)
+	{
+		for (int objectIndex : wheelObjects.lcds)
+		{
+			showObject(mesh, objectIndex, visible);
+		}
+	}
+
+	// Rev and flag lights, gears and displays: what GP4 draws without the light map in the cockpit
+	void hideLitObjects(BYTE* mesh, const ExternalWheelObjects& wheelObjects)
+	{
+		for (int side = 0; side < 2; side++)
+		{
+			for (int light = 0; light < NUM_REV_LIGHTS; light++)
+			{
+				showObject(mesh, wheelObjects.revOn[side][light], false);
+			}
+
+			for (int light = 0; light < NUM_FLAG_LIGHTS; light++)
+			{
+				showObject(mesh, wheelObjects.flagOn[side][light], false);
+			}
+		}
+
+		for (int gear = 0; gear < NUM_GEARS; gear++)
+		{
+			showObject(mesh, wheelObjects.gears[gear], false);
+		}
+
+		for (const pair<int, int>& display : wheelObjects.displays)
+		{
+			showObject(mesh, display.second, false);
+		}
+	}
+
+	void drawWheelMesh(BYTE* device, BYTE* mesh)
+	{
+		// The steering wheel shader sets its light map states on a shader change only
+		field<BYTE*>(device, DEVICE_CURRENT_SHADER) = NULL;
+
+		MeshDrawType draw = *reinterpret_cast<MeshDrawType*>(field<BYTE*>(mesh, 0) + MESH_DRAW);
+		draw(mesh, -1, NULL, 0);
+	}
+
+	long __stdcall wheelLightMapTransformFunc(BYTE* d3dDevice, DWORD state, const D3DMATRIX* matrix)
+	{
+		// Projected in the car's space, as the flat external wheel does, instead of the cockpit camera's
+		if (externalLightMapPass)
+		{
+			matrix = &externalLightMapMatrix;
+		}
+
+		D3DSetTransformType setTransform = *reinterpret_cast<D3DSetTransformType*>(field<BYTE*>(d3dDevice, 0) + D3DDEVICE8_SET_TRANSFORM);
+
+		return setTransform(d3dDevice, state, matrix);
+	}
+
+	void __fastcall wheelShaderFlushFunc(BYTE* device, void* /*edx*/)
+	{
+		if (shadowMultiplyPass)
+		{
+			// The frame times the track shadow: stage 0 white, stage 1 the light map GP4 set up, no depth written
+			DeviceQueueRenderStateFunc(device, D3DRS_ALPHABLENDENABLE, 1);
+			DeviceQueueRenderStateFunc(device, D3DRS_SRCBLEND, D3DBLEND_ZERO);
+			DeviceQueueRenderStateFunc(device, D3DRS_DESTBLEND, D3DBLEND_SRCCOLOR);
+			DeviceQueueRenderStateFunc(device, D3DRS_ALPHATESTENABLE, 0);
+			DeviceQueueRenderStateFunc(device, D3DRS_ZWRITEENABLE, 0);
+			DeviceQueueRenderStateFunc(device, D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+			DeviceQueueRenderStateFunc(device, D3DRS_FOGENABLE, 0);
+			DeviceQueueRenderStateFunc(device, D3DRS_TEXTUREFACTOR, 0xffffffff);
+			DeviceQueueTextureStageStateFunc(device, 0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+			DeviceQueueTextureStageStateFunc(device, 0, D3DTSS_COLORARG1, D3DTA_TFACTOR);
+			DeviceQueueTextureStageStateFunc(device, 0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+			DeviceQueueTextureStageStateFunc(device, 0, D3DTSS_ALPHAARG1, D3DTA_TFACTOR);
+		}
+
+		// original function call
+		DeviceFlushStateFunc(device);
+	}
+
+	// The advanced car shader objects again, through the steering wheel shader and multiplied by the car's track shadow.
+	// Only the objects to darken are drawn when called
+	void drawShadowPass(BYTE* device, BYTE* mesh, const vector<int>& objects, int lightMapTexture, bool carSpace)
+	{
+		BYTE* wheelShader = GetShaderFunc(COCKPIT_LIGHT_MAP_SHADER);
+		BYTE* advancedShader = GetShaderFunc(ADVANCED_CAR_SHADER);
+
+		if (wheelShader == NULL || advancedShader == NULL)
+		{
+			return;
+		}
+
+		DWORD zWrite = 0, zFunc = 0, fog = 0, textureFactor = 0;
+
+		DeviceGetRenderStateFunc(device, D3DRS_ZWRITEENABLE, &zWrite);
+		DeviceGetRenderStateFunc(device, D3DRS_ZFUNC, &zFunc);
+		DeviceGetRenderStateFunc(device, D3DRS_FOGENABLE, &fog);
+		DeviceGetRenderStateFunc(device, D3DRS_TEXTUREFACTOR, &textureFactor);
+
+		// The object flags stay as they are, the shader only changes for this draw
+		for (int objectIndex : objects)
+		{
+			ApplyShaderToObjectFunc(mesh, wheelShader, objectIndex, 0);
+		}
+
+		DWORD lightMap = field<DWORD>(wheelShader, SHADER_LIGHT_MAP);
+
+		field<int>(wheelShader, SHADER_LIGHT_MAP) = lightMapTexture;
+		externalLightMapPass = carSpace;
+		shadowMultiplyPass = true;
+
+		drawWheelMesh(device, mesh);
+
+		shadowMultiplyPass = false;
+		externalLightMapPass = false;
+		field<DWORD>(wheelShader, SHADER_LIGHT_MAP) = lightMap;
+
+		for (int objectIndex : objects)
+		{
+			ApplyShaderToObjectFunc(mesh, advancedShader, objectIndex, 0);
+		}
+
+		// The next shader sets its own states again
+		field<BYTE*>(device, DEVICE_CURRENT_SHADER) = NULL;
+
+		DeviceQueueRenderStateFunc(device, D3DRS_ZWRITEENABLE, zWrite);
+		DeviceQueueRenderStateFunc(device, D3DRS_ZFUNC, zFunc);
+		DeviceQueueRenderStateFunc(device, D3DRS_FOGENABLE, fog);
+		DeviceQueueRenderStateFunc(device, D3DRS_TEXTUREFACTOR, textureFactor);
+	}
+
+	bool objectDrawn(BYTE* mesh, int objectIndex)
+	{
+		BYTE* record = field<BYTE*>(mesh, MESH_OBJECTS) + objectIndex * MESH_OBJECT_SIZE;
+		BYTE* data = field<BYTE*>(record, MESH_OBJECT_DATA);
+
+		return data != NULL && (field<DWORD>(field<BYTE*>(data, OBJECT_DATA_STATES), field<int>(record, MESH_OBJECT_INDEX) * OBJECT_STATE_SIZE) & OBJECT_STATE_DRAWN) != 0;
+	}
+
+	void __fastcall cockpitFirstPassDrawFunc(BYTE* mesh, void* /*edx*/, int objectIndex, void* matrix, char flag)
+	{
+		// original call
+		MeshDrawType draw = *reinterpret_cast<MeshDrawType*>(field<BYTE*>(mesh, 0) + MESH_DRAW);
+		draw(mesh, objectIndex, matrix, flag);
+
+		BYTE* cockpit = drawMeshesCockpit;
+		BYTE* advancedShader = GetShaderFunc(ADVANCED_CAR_SHADER);
+
+		// Right after the unlit objects of the wheel, before GP4 draws the lit ones over them
+		if (cockpit == NULL || drawMeshesLightMap == -1 || mesh != field<BYTE*>(cockpit, COCKPIT_WHEEL_MESH) || advancedShader == NULL
+			|| field<BYTE*>(cockpit, COCKPIT_DEVICE) == NULL || field<BYTE*>(mesh, MESH_OBJECTS) == NULL)
+		{
+			return;
+		}
+
+		DWORD numObjects = field<DWORD>(mesh, MESH_NUM_OBJECTS);
+
+		if (numObjects > MAX_MESH_OBJECTS)
+		{
+			return;
+		}
+
+		// The first pass' objects: DRAWN as GP4 set them for it. Those not mapped are drawn again by the second pass, without the shadow
+		vector<int> objects;
+		vector<bool> drawn(numObjects);
+
+		for (DWORD i = 0; i < numObjects; i++)
+		{
+			drawn[i] = objectDrawn(mesh, (int)i);
+
+			if (drawn[i] && GetObjectShaderFunc(mesh, (int)i) == advancedShader)
+			{
+				objects.push_back((int)i);
+			}
+		}
+
+		if (objects.empty())
+		{
+			return;
+		}
+
+		hideAllObjects(mesh);
+
+		for (int i : objects)
+		{
+			SetObjectVisibleFunc(mesh, 1, i);
+		}
+
+		drawShadowPass(field<BYTE*>(cockpit, COCKPIT_DEVICE), mesh, objects, drawMeshesLightMap, false);
+
+		// Back as the first pass had them, DrawMeshes sets the second pass' next
+		for (DWORD i = 0; i < numObjects; i++)
+		{
+			SetObjectVisibleFunc(mesh, drawn[i] ? 1 : 0, (int)i);
+		}
+	}
+
+	void __fastcall cockpitDrawMeshesFunc(BYTE* cockpit, void* /*edx*/, int lightMapTexture)
+	{
+		DWORD lightMapPass = MemUtils::addressToValue<DWORD>(advCarShaderLightMapPass);
+
+		// The advanced car shader's own light map pass needs what steering wheel meshes don't have
+		*MemUtils::addressToPtr<DWORD>(advCarShaderLightMapPass) = 0;
+		drawMeshesCockpit = cockpit;
+		drawMeshesLightMap = lightMapTexture;
+
+		// original function call
+		CockpitDrawMeshesFunc(cockpit, lightMapTexture);
+
+		drawMeshesCockpit = NULL;
+		*MemUtils::addressToPtr<DWORD>(advCarShaderLightMapPass) = lightMapPass;
 	}
 
 	void showRevLights(BYTE* mesh, const ExternalWheelObjects& wheelObjects, BYTE* car)
@@ -3175,6 +3624,7 @@ namespace SteeringWheels
 		int numMeshCars = 0;
 		DWORD lightMap = field<DWORD>(shader, SHADER_LIGHT_MAP);
 		DWORD normalizeNormals = 0;
+		DWORD advCarLightMapPass = 0;
 		D3DMATRIX worldMatrix = field<D3DMATRIX>(device, DEVICE_WORLD_MATRIX);
 		float maxDistance = MemUtils::addressToValue<float>(stWheelMaxDistance);
 		DWORD numEntries = field<DWORD>(lodManager, LOD_NUM_ENTRIES);
@@ -3208,28 +3658,97 @@ namespace SteeringWheels
 
 			if (numMeshCars == 0)
 			{
-				// No light map, and normals kept unit length on the scaled mesh
+				// No light map unless the car is in a track shadow, and normals kept unit length on the scaled mesh
 				field<DWORD>(shader, SHADER_LIGHT_MAP) = 0xffffffff;
 				field<BYTE*>(device, DEVICE_CURRENT_SHADER) = NULL;
 
 				DeviceGetRenderStateFunc(device, D3DRS_NORMALIZENORMALS, &normalizeNormals);
 				DeviceQueueRenderStateFunc(device, D3DRS_NORMALIZENORMALS, 1);
+
+				// Left from the last car part drawn: the advanced car shader's own light map pass needs what steering wheel meshes don't have
+				advCarLightMapPass = MemUtils::addressToValue<DWORD>(advCarShaderLightMapPass);
+				*MemUtils::addressToPtr<DWORD>(advCarShaderLightMapPass) = 0;
 			}
 
 			const ExternalWheelObjects& wheelObjects = findExternalWheelObjects(mesh);
+			int lightMapTexture = field<int>(car, CAR_WHEEL_TEXTURE);	// the car's track shadow, not yet replaced by the flat wheel textures
 
 			showStaticObjects(mesh, wheelObjects);
-			showRevLights(mesh, wheelObjects, car);
-			showDashObjects(mesh, wheelObjects, carIndex);
-			showDisplays(mesh, wheelObjects, carIndex);
 
 			D3DMATRIX world = externalWheelMatrix(car, team);
 
 			MeshSetTransformFunc(mesh, &world, -1);
 			MeshUpdateTransformsFunc(mesh, -1, 0);
 
-			MeshDrawType draw = *reinterpret_cast<MeshDrawType*>(field<BYTE*>(mesh, 0) + MESH_DRAW);
-			draw(mesh, -1, NULL, 0);
+			if (wheelLightMapPatched && lightMapTexture != -1)
+			{
+				// As the cockpit: the unlit objects with the car's track shadow, projected in car space as on the flat wheel
+				D3DMATRIX projection = matrixIdentity();
+				projection._11 = 0.25f;
+				projection._22 = -0.25f;
+				projection._32 = -0.1f;
+				projection._41 = 0.5f;
+				projection._42 = 0.35f;
+
+				externalLightMapMatrix = matrixMultiply(matrixMultiply(field<D3DMATRIX>(device, DEVICE_INVERSE_VIEW), matrixInverseAffine(field<D3DMATRIX>(car, CAR_MATRIX))), projection);
+
+				hideLitObjects(mesh, wheelObjects);
+
+				// The labels are lit for GP4 too
+				for (int objectIndex : wheelObjects.litStatics)
+				{
+					showObject(mesh, objectIndex, false);
+				}
+
+				field<int>(shader, SHADER_LIGHT_MAP) = lightMapTexture;
+				externalLightMapPass = true;
+
+				drawWheelMesh(device, mesh);
+
+				externalLightMapPass = false;
+				field<DWORD>(shader, SHADER_LIGHT_MAP) = 0xffffffff;
+
+				// The advanced car shader objects darkened by the track shadow too, before the lit ones are drawn over them
+				if (wheelShaderFlushPatched && !wheelObjects.advancedStatics.empty())
+				{
+					for (int objectIndex : wheelObjects.statics)
+					{
+						showObject(mesh, objectIndex, find(wheelObjects.advancedStatics.begin(), wheelObjects.advancedStatics.end(), objectIndex) != wheelObjects.advancedStatics.end());
+					}
+
+					drawShadowPass(device, mesh, wheelObjects.advancedStatics, lightMapTexture, true);
+				}
+
+				// Then the lit ones on their own, without it
+				setStaticObjects(mesh, wheelObjects, false);
+
+				for (int objectIndex : wheelObjects.litStatics)
+				{
+					showObject(mesh, objectIndex, true);
+				}
+
+				showRevLights(mesh, wheelObjects, car);
+				showDashObjects(mesh, wheelObjects, carIndex);
+				showDisplays(mesh, wheelObjects, carIndex);
+				showLcdObjects(mesh, wheelObjects, true);
+
+				drawWheelMesh(device, mesh);
+
+				// The next car sharing the mesh starts from its static objects again
+				showLcdObjects(mesh, wheelObjects, false);
+				setStaticObjects(mesh, wheelObjects, true);
+			}
+			else
+			{
+				showRevLights(mesh, wheelObjects, car);
+				showDashObjects(mesh, wheelObjects, carIndex);
+				showDisplays(mesh, wheelObjects, carIndex);
+				showLcdObjects(mesh, wheelObjects, true);
+
+				drawWheelMesh(device, mesh);
+
+				showLcdObjects(mesh, wheelObjects, false);
+			}
 
 			// Only the viewed car's wheel, and not in the cockpit, where GP4 draws the LCD itself
 			if (externalLcd && carIndex == viewedCar() && MemUtils::addressToValue<BYTE>(currentCamera) != CAMERA_COCKPIT)
@@ -3262,6 +3781,8 @@ namespace SteeringWheels
 			field<BYTE*>(device, DEVICE_CURRENT_SHADER) = NULL;
 
 			DeviceQueueRenderStateFunc(device, D3DRS_NORMALIZENORMALS, normalizeNormals);
+
+			*MemUtils::addressToPtr<DWORD>(advCarShaderLightMapPass) = advCarLightMapPass;
 
 			// Put the selected mesh back where the cockpit placed it this frame, the others are placed before each draw
 			CockpitSetMeshTransformsFunc(cockpit, cockpit + COCKPIT_ROTATION_MATRIX, cockpit + COCKPIT_WORLD_MATRIX);
@@ -3441,6 +3962,14 @@ namespace SteeringWheels
 			OutputGP4PPDebugString((glovesPosition ? "Loaded " : "Failed to open ") + externalSettings.name + " Gloves INI: " + iniFileName);
 		}
 
+		try
+		{
+			advancedCarShader = iniSettings[cockpitSettings.section]["AdvancedCarShader"].getAs<bool>();
+		}
+		catch (exception ex) {}
+
+		OutputGP4PPDebugString(cockpitSettings.name + " Advanced Car Shader : " + string(advancedCarShader ? "Enabled" : "Disabled"));
+
 		loadAssetSettings(iniSettings, cockpitSettings);
 		loadAssetSettings(iniSettings, dashSettings);
 		loadAssetSettings(iniSettings, lcdSettings);
@@ -3604,7 +4133,7 @@ namespace SteeringWheels
 	{
 		bool lcdColourEnabled = lcdIndividual || lcdColour.getColour() != 0;
 		bool lcdScaleEnabled = lcdIndividual || lcdScale != 1.0f;
-		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled || lcdScaleEnabled;
+		bool cockpitEnabled = cockpitSettings.enabled || dashSettings.enabled || lcdSettings.enabled || lcdColourEnabled || lcdScaleEnabled || advancedCarShader;
 		bool externalEnabled = externalSettings.enabled || useCockpitMesh || externalLcd || glovesPosition;
 		bool countsRead = (externalEnabled || cockpitEnabled) && readCarCounts();
 
@@ -3695,6 +4224,23 @@ namespace SteeringWheels
 				if (useCockpitMesh)
 				{
 					OutputGP4PPDebugString("Steering Wheels: gloves and arms on the 3D external steering wheels : " + string(glovesPatched ? "Applied" : "Not applied"));
+
+					// Track shadows on the 3D wheels: the light map of the steering wheel shader projected in car space
+					BYTE* lightMapCall = MemUtils::addressToPtr<BYTE>(wheelLightMapTransformCall);
+
+					if (memcmp(lightMapCall, wheelLightMapTransformBytes, sizeof(wheelLightMapTransformBytes)) == 0
+						&& memcmp(lightMapCall - 5, wheelLightMapTransformArgs, sizeof(wheelLightMapTransformArgs)) == 0)
+					{
+						BYTE lightMapPatch[] = { 0xe8, 0x00, 0x00, 0x00, 0x00, 0x90 };
+						DWORD lightMapOffset = PtrToUlong(wheelLightMapTransformFunc) - wheelLightMapTransformCall - 5;
+
+						memcpy(&lightMapPatch[1], &lightMapOffset, sizeof(DWORD));
+						MemUtils::patchAddress((LPVOID)wheelLightMapTransformCall, lightMapPatch, sizeof(lightMapPatch));
+
+						wheelLightMapPatched = true;
+					}
+
+					OutputGP4PPDebugString("Steering Wheels: track shadows on the 3D external steering wheels : " + string(wheelLightMapPatched ? "Applied" : "Not applied"));
 				}
 
 				if (glovesPosition)
@@ -3704,6 +4250,36 @@ namespace SteeringWheels
 
 				externalPatched = true;
 			}
+		}
+
+		// Track shadows on the advanced car shader objects of the steering wheels: the steering wheel shader's flush, and the cockpit draw
+		if (countsRead && (useCockpitMesh || advancedCarShader))
+		{
+			if (checkCallTarget(wheelShaderFlushCall, DeviceFlushState, "CGP4SteeringWheelShader::Render FlushQueuedStates"))
+			{
+				MemUtils::injectFunctionCall(wheelShaderFlushCall, PtrToUlong(wheelShaderFlushFunc), VAR_NAME(wheelShaderFlushFunc));
+
+				wheelShaderFlushPatched = true;
+			}
+
+			BYTE* firstPassDraw = MemUtils::addressToPtr<BYTE>(cockpitFirstPassDraw);
+
+			if (wheelShaderFlushPatched && advancedCarShader && checkCallTarget(cockpitDrawMeshesCall, CockpitDrawMeshes, "CGP4Cockpit::DrawMeshes")
+				&& memcmp(firstPassDraw, cockpitFirstPassDrawBytes, sizeof(cockpitFirstPassDrawBytes)) == 0)
+			{
+				MemUtils::injectFunctionCall(cockpitDrawMeshesCall, PtrToUlong(cockpitDrawMeshesFunc), VAR_NAME(cockpitDrawMeshesFunc));
+
+				// The shadow pass between DrawMeshes' unlit and lit draws
+				BYTE firstPassPatch[] = { 0xe8, 0x00, 0x00, 0x00, 0x00 };
+				DWORD firstPassOffset = PtrToUlong(cockpitFirstPassDrawFunc) - cockpitFirstPassDraw - 5;
+
+				memcpy(&firstPassPatch[1], &firstPassOffset, sizeof(DWORD));
+				MemUtils::patchAddress((LPVOID)cockpitFirstPassDraw, firstPassPatch, sizeof(firstPassPatch));
+
+				cockpitShadowPatched = true;
+			}
+
+			OutputGP4PPDebugString("Steering Wheels: track shadows on the advanced car shader steering wheel objects : external " + string(wheelShaderFlushPatched && wheelLightMapPatched ? "Applied" : "Not applied") + ", cockpit " + string(cockpitShadowPatched ? "Applied" : "Not applied"));
 		}
 
 		// LCD on the external wheel: its labels are drawn on the screen during our pass only
@@ -3779,6 +4355,21 @@ namespace SteeringWheels
 				MemUtils::injectFunctionCall(cockpitLoadMeshCall, PtrToUlong(cockpitLoadMeshFunc), VAR_NAME(cockpitLoadMeshFunc));
 
 				MemUtils::injectFunctionCall(lcdDrawCall, PtrToUlong(lcdDrawFunc), VAR_NAME(lcdDrawFunc));
+
+				// Advanced car shader: GP4 applies it to the whole wheel, the mesh loading puts the lit objects back on the cockpit shader
+				if (advancedCarShader)
+				{
+					if (memcmp(MemUtils::addressToPtr<BYTE>(cockpitWheelShaderPush), cockpitWheelShaderPushBytes, sizeof(cockpitWheelShaderPushBytes)) == 0)
+					{
+						BYTE advancedShader = ADVANCED_CAR_SHADER;
+
+						MemUtils::patchAddress((LPVOID)(cockpitWheelShaderPush + 1), &advancedShader, sizeof(BYTE));
+
+						advancedCarShaderPatched = true;
+					}
+
+					OutputGP4PPDebugString("Steering Wheels: advanced car shader on the unlit cockpit steering wheel objects : " + string(advancedCarShaderPatched ? "Applied" : "Not applied"));
+				}
 
 				bool colourHook = lcdColourEnabled && checkCallBytes(lcdColourCall, lcdColourBytes, "CGP4LCD::Draw SetFontColour");
 				bool scaleHook = lcdScaleEnabled && checkCallBytes(lcdScaleCall, lcdScaleBytes, "CGP4LCD::Draw SetFontScale");

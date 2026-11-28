@@ -12,7 +12,6 @@ namespace General
 	bool disableCDCheck = false;
 	bool fix3DWheelsTreadMapping = false;
 	bool fix3DWheelsCockpitView = false;
-	bool stWheelAdvancedCarShader = false;
 	bool showOpponentsFuelLaps = false;
 	bool opponentsFuelLapsPatched = false;
 	bool fixProjectedShadows = false;
@@ -139,14 +138,18 @@ namespace General
 
 		OutputGP4PPDebugString("Rotate Treads in Cockpit View : " + string(fix3DWheelsCockpitView ? "Enabled" : "Disabled"));
 
-		// Enable Advanced Car Shader for in-cockpit steering wheel
-		try
+		// Superseded in 2.3.2 by [CockpitSteeringWheels] AdvancedCarShader, only read to say so
+		for (const char* oldKey : { "StWheelAdvancedCarShader", "StWheelAdvancedCarShaderMainOnly" })
 		{
-			stWheelAdvancedCarShader = iniSettings["Settings"]["StWheelAdvancedCarShader"].getAs<bool>();
+			try
+			{
+				if (iniSettings["Settings"][oldKey].getAs<bool>())
+				{
+					OutputGP4PPDebugString(string(oldKey) + " is no longer supported and is ignored, use [CockpitSteeringWheels] AdvancedCarShader instead");
+				}
+			}
+			catch (exception ex) {}
 		}
-		catch (exception ex) {}
-
-		OutputGP4PPDebugString("Advanced Car Shader for Cockpit Steering Wheel : " + string(stWheelAdvancedCarShader ? "Enabled" : "Disabled"));
   
 		// Show the opponents' fuel laps in a race
 		try
@@ -226,15 +229,6 @@ namespace General
 			{
 				OutputGP4PPDebugString("Fix Projected Shadows : unexpected bytes in BuildCarShadowDecals or at the shadow map coverage, patch not applied");
 			}
-		}
-
-		// Apply Advanced Car Shader for in-cockpit steering wheel Patch
-		if (stWheelAdvancedCarShader)
-		{
-			//Patch to set the steering wheel in cockpit view to use the advanced car shader (0x12)
-			DWORD carShaderPatchAddress = 0x0046faf3;
-			BYTE carShaderPatch = { 0x12 };
-			GP4MemLib::MemUtils::patchAddress((LPVOID)carShaderPatchAddress, MemUtils::toBytes<BYTE>(carShaderPatch), sizeof(BYTE));
 		}
 
 		// Apply Show Opponents Fuel Laps Patch

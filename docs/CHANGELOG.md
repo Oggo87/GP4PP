@@ -5,6 +5,10 @@
     * Added support for per-team, per-car and per-steering wheel LCD text positions on the cockpit steering wheel, from `.pos` files in GP4's `fonts` folder, option to always show the LCD on steering wheels without an `LCD` object, global or per-car LCD text colours and sizes, and custom LCD fonts with their size and weight. See [Steering Wheels Settings](Steering-Wheels-Settings.md#CockpitLCD) for more details
     * Added option to show the LCD text on the viewed car's external steering wheel, flat or 3D, with the pit menu usable from that camera. See [Steering Wheels Settings](Steering-Wheels-Settings.md#ShowLCD) for more details
     * Added per-car positions for the gloves and wrists on the external steering wheels, flat or 3D. See [Steering Wheels Settings](Steering-Wheels-Settings.md#GlovesPosition-and-GlovesIni) for more details
+    * Replaced `StWheelAdvancedCarShader` in `[Settings]` with `AdvancedCarShader` in `[CockpitSteeringWheels]`: the advanced car shader is now applied to the unlit objects of the steering wheel only, keeping lights, displays and the LCD on GP4's cockpit shader. The old setting is ignored. See [Steering Wheels Settings](Steering-Wheels-Settings.md#AdvancedCarShader) for more details
+    * Fixed track shadows (trees, bridges) not darkening the 3D external steering wheels
+    * Fixed track shadows not darkening per-team and per-car flat external steering wheels
+    * Fixed track shadows not darkening steering wheel objects drawn with the advanced car shader (`AdvancedCarShader`), in the cockpit and on the 3D external steering wheels
 
 * 2.3.1
     * Added GP4 Tweaker compatibility for the 3D external steering wheels: when GP4 Tweaker's `SteerPos` tweak is enabled, they use its per-car steering wheel positions. See [Steering Wheels Settings](Steering-Wheels-Settings.md#UseCockpitMesh) for more details
@@ -39,7 +43,7 @@
     * Merged HiResPitcrew.dll functionality into GP4PP.dll
     * Added support for per-team pitcrew meshes
     * Added patch to disable built-in CD check
-    * Added patch to enable advanced car shader for in-cockpit steering wheel mesh
+    * Added patch to enable advanced car shader for in-cockpit steering wheel mesh (superseded in 2.3.2)
 
 * 1.4
     * Added fix for reversed tyre tread bug when using 3D rims

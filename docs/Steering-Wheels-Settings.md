@@ -27,6 +27,7 @@ PerTeam = false
 PerDriver = false
 AutoName = true
 FileName = 
+AdvancedCarShader = false
 
 [CockpitDashes]
 PerTeam = false
@@ -83,9 +84,11 @@ When enabled, the external steering wheels are drawn in 3D with the cockpit stee
 * warning lights (`Warning_left_front_tyre_1` and the other tyre, wing and plank warnings)
 * pit lights (`Pit_1` for the car's own pit light, `Pit_2` for its team-mate's in a race)
 
-These work the same way they do in the cockpit view. As in the cockpit view, the off state objects of the aids, rev lights, flags, pit and opposition spread displays are never shown. Only objects that are part of the steering wheel mesh are shown, so for example a gear display that is part of the dash mesh is not. The log lists how many objects of each display a steering wheel mesh has. Other displays (suggested gear, aids, LEDs, opposition spread), mirrors and, unless [ShowLCD](#ShowLCD) is enabled, the LCD are not shown.
+These work the same way they do in the cockpit view. As in the cockpit view, the off state objects of the aids, rev lights, flags, pit and opposition spread displays are never shown. Only objects that are part of the steering wheel mesh are shown, so for example a gear display that is part of the dash mesh is not. The log lists how many objects of each display a steering wheel mesh has. Other displays (suggested gear, aids, LEDs, opposition spread), and mirrors are not shown. The `LCD` object is shown, as in the cockpit view, and its text only when [ShowLCD](#ShowLCD) is enabled.
 
 GP4's own flat gloves and arms are still drawn on the 3D external steering wheels, in the same place and with the same team arm colours as on the flat steering wheel; only the flat steering wheel and its rev lights are left out.
+
+Track shadows, such as those of trees and bridges, darken the 3D external steering wheels the same way they darken the cockpit steering wheel: lit objects (rev and flag lights, gear and other displays, including the display labels, and the `LCD` object, which the 3D external steering wheels show as the cockpit does) are not darkened. Objects drawn with the advanced car shader (see [AdvancedCarShader](#AdvancedCarShader)) are darkened as well, in the cockpit view and on the external steering wheels.
 
 When GP4 Tweaker's `SteerPos` tweak is enabled, the 3D external steering wheels use the per-car position set in GP4 Tweaker, the same as the flat steering wheels.
 
@@ -122,7 +125,19 @@ The LCD text is drawn on the mesh's own `LCD` object, with the same layout and s
 
 The meshes are loaded together with the default cockpit meshes, once per file, and are released when returning to the menu.
 
-The meshes use the same shader as the default cockpit steering wheel, so they follow the [Steering Wheel Advanced Car Shader](General-Settings.md#Steering-Wheel-Advanced-Car-Shader) setting.
+The meshes use the same shader as the default cockpit steering wheel, so they follow the [AdvancedCarShader](#AdvancedCarShader) setting.
+
+### AdvancedCarShader
+
+When enabled, the unlit objects of the cockpit steering wheel use GP4's built-in advanced car shader (the same one used for cars and helmets), improving their appearance with better reflections and lighting effects. The unlit objects are `steering_wheel`, the objects in their off state (`*_off`) and every object GP4 does not know by name, such as grips, paddles, buttons and trim. The objects GP4 lights up (rev and flag lights, LEDs, gears, display digits and labels, aids, warning and pit lights, mirrors) and the `LCD` (or `LCD[0]`, `LCD[1]`...) objects, which GP4 lights up too, keep GP4's own cockpit shader. Object names are compared without case.
+
+Track shadows, such as those of trees and bridges, darken the unlit objects drawn with the advanced car shader, while the lit objects are not darkened, as in GP4.
+
+It applies to the default steering wheel as well as to the per-team and per-car ones, in the cockpit view and on the 3D external steering wheels (see [UseCockpitMesh](#UseCockpitMesh)). It does not need `PerTeam`, `PerDriver` or `FileName` to be set.
+
+The advanced car shader does not support alpha-blending, so if the steering wheel mesh uses any alpha-blending textures on its unlit objects (for example, for cutouts or holes in the mesh), those parts appear fully opaque when this setting is enabled. It is intended to be used with full 3D steering wheel meshes that do not rely on alpha-blending.
+
+This setting supersedes `StWheelAdvancedCarShader` and `StWheelAdvancedCarShaderMainOnly` in `[Settings]`, which applied the advanced car shader to the whole steering wheel and are now ignored.
 
 ## CockpitDashes
 
